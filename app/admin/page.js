@@ -45,9 +45,9 @@ function ResolveModal({ bet, onClose, onDone }) {
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" onClick={e => e.stopPropagation()}>
         <h2>Close market</h2>
-        <p style={{ color: 'var(--text2)', fontSize: '0.82rem', marginBottom: 16, lineHeight: 1.5 }}>{bet.title}</p>
-        <div style={{ marginBottom: 16 }}>
-          <div className="bar-container" style={{ height: 5, marginBottom: 6 }}>
+        <p style={{ color: 'var(--text2)', fontSize: '0.95rem', marginBottom: 18, lineHeight: 1.5 }}>{bet.title}</p>
+        <div style={{ marginBottom: 18 }}>
+          <div className="bar-container" style={{ height: 6, marginBottom: 8 }}>
             <div className="bar-yes" style={{ width: yesPct + '%' }} />
             <div className="bar-no" style={{ width: (100 - yesPct) + '%' }} />
           </div>
@@ -57,24 +57,17 @@ function ResolveModal({ bet, onClose, onDone }) {
             <span className="no-label">{bet.total_no || 0} sl NO</span>
           </div>
         </div>
-
-        <div style={{ fontSize: '0.72rem', color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 500, marginBottom: 8 }}>
-          Resolve outcome
-        </div>
-        <div className="side-btns" style={{ marginBottom: 16 }}>
+        <div style={{ fontSize: '0.8rem', color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 600, marginBottom: 10 }}>Resolve outcome</div>
+        <div className="side-btns" style={{ marginBottom: 18 }}>
           <button className={`btn btn-yes${outcome === 'yes' ? ' active' : ''}`} onClick={() => setOutcome('yes')}>YES wins</button>
           <button className={`btn btn-no${outcome === 'no' ? ' active' : ''}`} onClick={() => setOutcome('no')}>NO wins</button>
         </div>
-
-        <div style={{ borderTop: '1px solid var(--border)', paddingTop: 14, marginBottom: 14 }}>
-          <div style={{ fontSize: '0.72rem', color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 500, marginBottom: 8 }}>
-            Or cancel & refund everyone
-          </div>
-          <button className="btn btn-ghost" style={{ width: '100%', justifyContent: 'center', fontSize: '0.8rem' }} onClick={refund} disabled={loading}>
+        <div style={{ borderTop: '1px solid var(--border)', paddingTop: 16, marginBottom: 16 }}>
+          <div style={{ fontSize: '0.8rem', color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 600, marginBottom: 10 }}>Or cancel & refund everyone</div>
+          <button className="btn btn-ghost" style={{ width: '100%', justifyContent: 'center' }} onClick={refund} disabled={loading}>
             {loading ? '...' : 'Refund all participants'}
           </button>
         </div>
-
         {err && <div className="error-msg">{err}</div>}
         <div className="modal-actions">
           <button className="btn btn-ghost" onClick={onClose} style={{ flex: 1 }}>Cancel</button>
@@ -94,42 +87,32 @@ function BetDetailModal({ bet, onClose }) {
 
   useEffect(() => {
     fetch(`/api/bets/${bet.id}`).then(r => r.json()).then(d => {
-      setPositions(d.positions || []);
-      setLoading(false);
+      setPositions(d.positions || []); setLoading(false);
     });
   }, [bet.id]);
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" style={{ maxWidth: 520 }} onClick={e => e.stopPropagation()}>
+      <div className="modal" style={{ maxWidth: 540 }} onClick={e => e.stopPropagation()}>
         <h2>{bet.title}</h2>
-        <div style={{ fontSize: '0.72rem', color: 'var(--text3)', marginBottom: 14 }}>
-          Created by: {bet.creator_name || 'unknown'} · Status: {bet.status}
-          {bet.outcome && ` · Outcome: ${bet.outcome.toUpperCase()}`}
+        <div style={{ fontSize: '0.82rem', color: 'var(--text3)', marginBottom: 16 }}>
+          By {bet.creator_name || 'unknown'} · {bet.status}{bet.outcome ? ` · ${bet.outcome.toUpperCase()}` : ''}
         </div>
-        {loading ? <div style={{ padding: '20px 0', color: 'var(--text3)', fontSize: '0.82rem' }}>loading...</div> : (
-          positions.length === 0 ? (
-            <div style={{ color: 'var(--text3)', fontSize: '0.82rem', padding: '12px 0' }}>No positions yet.</div>
-          ) : (
-            <table className="admin-table">
-              <thead>
-                <tr><th>User</th><th>Side</th><th>Amount</th></tr>
-              </thead>
-              <tbody>
-                {positions.map((p, i) => (
-                  <tr key={i}>
-                    <td>{p.user_name}</td>
-                    <td>
-                      <span style={{ color: p.side === 'yes' ? 'var(--yes)' : 'var(--no)', fontWeight: 600 }}>
-                        {p.side.toUpperCase()}
-                      </span>
-                    </td>
-                    <td style={{ fontFamily: 'var(--font-mono)' }}>{p.amount} sl</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )
+        {loading ? <div style={{ padding: '20px 0', color: 'var(--text3)' }}>loading...</div> : positions.length === 0 ? (
+          <div style={{ color: 'var(--text3)', padding: '12px 0' }}>No positions yet.</div>
+        ) : (
+          <table className="admin-table">
+            <thead><tr><th>User</th><th>Side</th><th>Amount</th></tr></thead>
+            <tbody>
+              {positions.map((p, i) => (
+                <tr key={i}>
+                  <td>{p.user_name}</td>
+                  <td><span style={{ color: p.side === 'yes' ? 'var(--yes)' : 'var(--no)', fontWeight: 700 }}>{p.side.toUpperCase()}</span></td>
+                  <td style={{ fontFamily: 'var(--font-mono)' }}>{p.amount} sl</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         )}
         <div className="modal-actions">
           <button className="btn btn-ghost" onClick={onClose} style={{ flex: 1, justifyContent: 'center' }}>Close</button>
@@ -150,42 +133,40 @@ function UserTradesModal({ user, onClose }) {
       .then(d => { setTrades(Array.isArray(d) ? d : []); setLoading(false); });
   }, [user.id]);
 
+  const won = trades.filter(t => t.status === 'resolved' && t.side === t.outcome).length;
+  const lost = trades.filter(t => t.status === 'resolved' && t.side !== t.outcome).length;
+
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" style={{ maxWidth: 560 }} onClick={e => e.stopPropagation()}>
-        <h2>{user.display_name} — trades</h2>
-        <div style={{ fontSize: '0.72rem', color: 'var(--text3)', marginBottom: 14 }}>
-          {user.email} · {user.credits} sl · {user.last_ip ? `IP: ${user.last_ip}` : 'IP: unknown'}
+      <div className="modal" style={{ maxWidth: 600 }} onClick={e => e.stopPropagation()}>
+        <h2>{user.display_name}</h2>
+        <div style={{ display: 'flex', gap: 20, marginBottom: 18, fontSize: '0.85rem', color: 'var(--text2)' }}>
+          <span>{user.email}</span>
+          <span style={{ fontFamily: 'var(--font-mono)' }}>{user.credits} sl</span>
+          {user.last_ip && <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text3)' }}>{user.last_ip}</span>}
+          {won + lost > 0 && <span style={{ color: 'var(--yes)' }}>{Math.round(won / (won + lost) * 100)}% win rate</span>}
         </div>
         {loading ? (
-          <div style={{ padding: '20px 0', color: 'var(--text3)', fontSize: '0.82rem' }}>loading...</div>
+          <div style={{ padding: '20px 0', color: 'var(--text3)' }}>loading...</div>
         ) : trades.length === 0 ? (
-          <div style={{ color: 'var(--text3)', fontSize: '0.82rem', padding: '12px 0' }}>No trades yet.</div>
+          <div style={{ color: 'var(--text3)', padding: '12px 0' }}>No trades yet.</div>
         ) : (
-          <div style={{ maxHeight: 360, overflowY: 'auto' }}>
+          <div style={{ maxHeight: 400, overflowY: 'auto' }}>
             <table className="admin-table">
-              <thead>
-                <tr><th>Market</th><th>Side</th><th>Amount</th><th>Status</th></tr>
-              </thead>
+              <thead><tr><th>Market</th><th>Side</th><th>Amount</th><th>Result</th></tr></thead>
               <tbody>
                 {trades.map((t, i) => (
                   <tr key={i}>
-                    <td style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <td style={{ maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       <Link href={`/bets/${t.bet_id}`} style={{ color: 'var(--text2)' }}>{t.title}</Link>
                     </td>
-                    <td>
-                      <span style={{ color: t.side === 'yes' ? 'var(--yes)' : 'var(--no)', fontWeight: 600 }}>
-                        {t.side.toUpperCase()}
-                      </span>
-                    </td>
+                    <td><span style={{ color: t.side === 'yes' ? 'var(--yes)' : 'var(--no)', fontWeight: 700 }}>{t.side.toUpperCase()}</span></td>
                     <td style={{ fontFamily: 'var(--font-mono)' }}>{t.amount} sl</td>
                     <td>
-                      <span className={`status-badge status-${t.status}`}>{t.status}</span>
-                      {t.status === 'resolved' && (
-                        <span style={{ marginLeft: 4, color: t.side === t.outcome ? 'var(--yes)' : 'var(--no)', fontSize: '0.75rem' }}>
-                          {t.side === t.outcome ? '✓ W' : '✗ L'}
-                        </span>
-                      )}
+                      {t.status === 'resolved'
+                        ? <span style={{ color: t.side === t.outcome ? 'var(--yes)' : 'var(--no)', fontWeight: 600 }}>{t.side === t.outcome ? '✓ Won' : '✗ Lost'}</span>
+                        : <span className={`status-badge status-${t.status}`}>{t.status}</span>
+                      }
                     </td>
                   </tr>
                 ))}
@@ -228,8 +209,8 @@ function AdjustCreditsModal({ user, onClose, onDone }) {
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" onClick={e => e.stopPropagation()}>
         <h2>Adjust solies</h2>
-        <p style={{ color: 'var(--text2)', fontSize: '0.82rem', marginBottom: 14 }}>
-          {user.display_name} · current: {user.credits} sl
+        <p style={{ color: 'var(--text2)', fontSize: '0.95rem', marginBottom: 16 }}>
+          {user.display_name} · current: <strong>{user.credits}</strong> sl
         </p>
         <div className="form-group">
           <label>Amount (positive to add, negative to remove)</label>
@@ -265,15 +246,14 @@ export default function AdminPage() {
   function showToast(msg) { setToast(msg); setTimeout(() => setToast(''), 4000); }
 
   useEffect(() => {
-    if (!session) return;
+    if (status !== 'authenticated') return;
     fetch('/api/bets').then(r => r.json()).then(d => { setBets(Array.isArray(d) ? d : []); setBetsLoading(false); });
     fetch('/api/admin/users').then(r => r.json()).then(d => { setUsers(Array.isArray(d) ? d : []); setUsersLoading(false); });
-  }, [session]);
+  }, [status]);
 
   function refreshBets() {
     fetch('/api/bets').then(r => r.json()).then(d => setBets(Array.isArray(d) ? d : []));
   }
-
   function refreshUsers() {
     fetch('/api/admin/users').then(r => r.json()).then(d => setUsers(Array.isArray(d) ? d : []));
   }
@@ -285,26 +265,24 @@ export default function AdminPage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action, userId: user.id }),
     });
-    if (res.ok) {
-      showToast(`${user.display_name} ${action === 'ban' ? 'banned' : 'unbanned'}`);
-      refreshUsers();
-    }
+    if (res.ok) { showToast(`${user.display_name} ${action === 'ban' ? 'banned' : 'unbanned'}`); refreshUsers(); }
   }
 
-  if (status === 'loading') return <><Navbar /><div className="loading">loading</div></>;
-  if (!session?.user?.isAdmin) {
+  // Wait for session to fully load
+  if (status === 'loading') return <><Navbar /><div className="loading">loading...</div></>;
+
+  if (status !== 'authenticated' || !session?.user?.isAdmin) {
     return (
       <>
         <Navbar />
         <div className="page-sm" style={{ textAlign: 'center', paddingTop: 80 }}>
-          <p style={{ color: 'var(--text2)', fontSize: '0.88rem' }}>Access denied.</p>
-          <Link href="/" className="btn btn-ghost" style={{ marginTop: 16, display: 'inline-flex' }}>← Back</Link>
+          <p style={{ color: 'var(--text2)', fontSize: '1rem' }}>Access denied.</p>
+          <Link href="/" className="btn btn-ghost" style={{ marginTop: 18, display: 'inline-flex' }}>← Back</Link>
         </div>
       </>
     );
   }
 
-  // Sort: open first, then rest
   const sortedBets = [...bets].sort((a, b) => {
     const ao = a.status === 'open' ? 0 : 1;
     const bo = b.status === 'open' ? 0 : 1;
@@ -321,72 +299,70 @@ export default function AdminPage() {
       <Navbar />
       <div className="page">
         {toast && (
-          <div style={{ position: 'fixed', bottom: 20, right: 20, background: 'var(--text)', color: 'var(--bg)', borderRadius: 7, padding: '10px 16px', fontSize: '0.8rem', zIndex: 300, boxShadow: '0 4px 20px rgba(0,0,0,0.4)' }}>
+          <div style={{ position: 'fixed', bottom: 24, right: 24, background: 'var(--text)', color: 'var(--bg)', borderRadius: 8, padding: '12px 18px', fontSize: '0.9rem', zIndex: 300, boxShadow: '0 4px 24px rgba(0,0,0,0.5)' }}>
             {toast}
           </div>
         )}
 
-        <div className="page-header">
-          <h1>Admin</h1>
-        </div>
+        <div className="page-header"><h1>Admin</h1></div>
 
         {/* Summary stats */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginBottom: 24 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 28 }}>
           {[
             { label: 'Markets', val: bets.length },
             { label: 'Open', val: bets.filter(b => b.status === 'open').length },
             { label: 'Users', val: users.length },
             { label: 'Banned', val: users.filter(u => u.is_banned).length },
           ].map(s => (
-            <div key={s.label} className="card" style={{ padding: '12px 14px' }}>
-              <div style={{ fontSize: '1.3rem', fontWeight: 600 }}>{s.val}</div>
-              <div style={{ fontSize: '0.68rem', color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.04em', marginTop: 2 }}>{s.label}</div>
+            <div key={s.label} className="card" style={{ padding: '16px 18px' }}>
+              <div style={{ fontSize: '1.6rem', fontWeight: 700 }}>{s.val}</div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.05em', marginTop: 3 }}>{s.label}</div>
             </div>
           ))}
         </div>
 
         <div className="tabs">
-          {[['markets', 'Markets'], ['users', 'Users']].map(([val, label]) => (
-            <button key={val} className={`tab${tab === val ? ' active' : ''}`} onClick={() => setTab(val)}>{label}</button>
-          ))}
+          <button className={`tab${tab === 'markets' ? ' active' : ''}`} onClick={() => setTab('markets')}>Markets</button>
+          <button className={`tab${tab === 'users' ? ' active' : ''}`} onClick={() => setTab('users')}>Users</button>
         </div>
 
         {/* ── MARKETS TAB ── */}
         {tab === 'markets' && (
           <>
-            <div className="tabs" style={{ marginBottom: 18 }}>
+            <div className="tabs" style={{ marginBottom: 20 }}>
               {[['all', 'All'], ['open', 'Open'], ['closed', 'Closed']].map(([val, label]) => (
                 <button key={val} className={`tab${marketFilter === val ? ' active' : ''}`} onClick={() => setMarketFilter(val)}>{label}</button>
               ))}
             </div>
             {betsLoading ? <div className="loading">loading</div> : filteredBets.length === 0 ? <div className="empty">No markets.</div> : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 {filteredBets.map(bet => {
                   const total = (bet.total_yes || 0) + (bet.total_no || 0);
                   const yesPct = total > 0 ? Math.round((bet.total_yes / total) * 100) : 50;
+                  const isClosed = bet.status !== 'open';
                   return (
-                    <div key={bet.id} className="card" style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                    <div key={bet.id} className="card" style={{ display: 'flex', alignItems: 'center', gap: 18, opacity: isClosed ? 0.55 : 1 }}>
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 5 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 7 }}>
                           <span className={`status-badge status-${bet.status}`}>{bet.status}</span>
                           {bet.outcome && <span className={`outcome-badge outcome-${bet.outcome}`}>{bet.outcome.toUpperCase()}</span>}
-                          <span style={{ fontSize: '0.68rem', color: 'var(--text3)' }}>#{bet.id} · by {bet.creator_name || 'anon'}</span>
+                          <span style={{ fontSize: '0.75rem', color: 'var(--text3)' }}>#{bet.id} · by {bet.creator_name || 'anon'}</span>
                         </div>
-                        <div style={{ fontWeight: 500, fontSize: '0.88rem', marginBottom: 7, lineHeight: 1.3 }}>{bet.title}</div>
-                        <div className="bar-container" style={{ marginBottom: 4 }}>
+                        <div style={{ fontWeight: 500, fontSize: '0.95rem', marginBottom: 9, lineHeight: 1.35 }}>{bet.title}</div>
+                        <div className="bar-container" style={{ marginBottom: 6 }}>
                           <div className="bar-yes" style={{ width: yesPct + '%' }} />
                           <div className="bar-no" style={{ width: (100 - yesPct) + '%' }} />
                         </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.68rem' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem' }}>
                           <span className="yes-label">YES {bet.total_yes || 0} sl</span>
                           <span style={{ color: 'var(--text3)' }}>{bet.participant_count || 0} participants</span>
                           <span className="no-label">{bet.total_no || 0} sl NO</span>
                         </div>
                       </div>
-                      <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-                        <button className="btn btn-ghost" style={{ fontSize: '0.75rem' }} onClick={() => setViewingBet(bet)}>Details</button>
-                        {bet.status === 'open' && (
-                          <button className="btn btn-primary" style={{ fontSize: '0.75rem' }} onClick={() => setResolving(bet)}>Close</button>
+                      <div style={{ display: 'flex', gap: 7, flexShrink: 0 }}>
+                        <button className="btn btn-ghost" style={{ fontSize: '0.82rem' }} onClick={() => setViewingBet(bet)}>Details</button>
+                        {!isClosed && (
+                          <button className="btn btn-primary" style={{ fontSize: '0.82rem' }} onClick={() => setResolving(bet)}>Close</button>
                         )}
                       </div>
                     </div>
@@ -399,7 +375,7 @@ export default function AdminPage() {
 
         {/* ── USERS TAB ── */}
         {tab === 'users' && (
-          usersLoading ? <div className="loading">loading</div> : (
+          usersLoading ? <div className="loading">loading</div> : users.length === 0 ? <div className="empty">No users yet.</div> : (
             <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
               <table className="admin-table">
                 <thead>
@@ -415,29 +391,27 @@ export default function AdminPage() {
                   {users.map(u => (
                     <tr key={u.id}>
                       <td>
-                        <button
-                          onClick={() => setViewingUserTrades(u)}
-                          style={{ background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', padding: 0 }}
-                        >
-                          <div style={{ fontWeight: 500, color: 'var(--text)', textDecoration: 'underline', textDecorationColor: 'var(--border2)' }}>{u.display_name}</div>
-                          <div style={{ fontSize: '0.7rem', color: 'var(--text3)' }}>{u.email}</div>
+                        <button onClick={() => setViewingUserTrades(u)} style={{ background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', padding: 0 }}>
+                          <div style={{ fontWeight: 600, color: 'var(--text)', textDecoration: 'underline', textDecorationColor: 'var(--border2)', fontSize: '0.9rem' }}>{u.display_name}</div>
+                          <div style={{ fontSize: '0.78rem', color: 'var(--text3)', marginTop: 1 }}>{u.email}</div>
                         </button>
                       </td>
-                      <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.82rem' }}>{u.credits}</td>
-                      <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: 'var(--text3)' }}>
-                        {u.last_ip || '—'}
+                      <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.9rem', fontWeight: 600 }}>{u.credits}</td>
+                      <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem', color: 'var(--text3)' }}>{u.last_ip || '—'}</td>
+                      <td>
+                        <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+                          {u.is_admin && <span className="tag-admin">admin</span>}
+                          {u.is_banned && <span style={{ fontSize: '0.72rem', background: '#2d0808', color: '#f87171', padding: '3px 8px', borderRadius: 4, fontWeight: 600 }}>banned</span>}
+                          {!u.is_admin && !u.is_banned && <span style={{ fontSize: '0.78rem', color: 'var(--text3)' }}>active</span>}
+                        </div>
                       </td>
                       <td>
-                        {u.is_admin && <span className="tag-admin" style={{ marginRight: 4 }}>admin</span>}
-                        {u.is_banned && <span style={{ fontSize: '0.65rem', background: '#2d0808', color: '#f87171', padding: '2px 6px', borderRadius: 3, fontWeight: 500 }}>banned</span>}
-                      </td>
-                      <td>
-                        <div style={{ display: 'flex', gap: 5 }}>
-                          <button className="btn btn-ghost" style={{ fontSize: '0.72rem', padding: '4px 8px' }} onClick={() => setAdjustingUser(u)}>Solies</button>
+                        <div style={{ display: 'flex', gap: 6 }}>
+                          <button className="btn btn-ghost" style={{ fontSize: '0.8rem', padding: '5px 10px' }} onClick={() => setAdjustingUser(u)}>Solies</button>
                           {!u.is_admin && (
                             <button
                               className={`btn ${u.is_banned ? 'btn-ghost' : 'btn-danger'}`}
-                              style={{ fontSize: '0.72rem', padding: '4px 8px' }}
+                              style={{ fontSize: '0.8rem', padding: '5px 10px' }}
                               onClick={() => toggleBan(u)}
                             >
                               {u.is_banned ? 'Unban' : 'Ban'}
@@ -454,29 +428,10 @@ export default function AdminPage() {
         )}
       </div>
 
-      {resolving && (
-        <ResolveModal
-          bet={resolving}
-          onClose={() => setResolving(null)}
-          onDone={(msg) => { showToast(msg); refreshBets(); }}
-        />
-      )}
-      {viewingBet && (
-        <BetDetailModal bet={viewingBet} onClose={() => setViewingBet(null)} />
-      )}
-      {adjustingUser && (
-        <AdjustCreditsModal
-          user={adjustingUser}
-          onClose={() => setAdjustingUser(null)}
-          onDone={(msg) => { showToast(msg); refreshUsers(); }}
-        />
-      )}
-      {viewingUserTrades && (
-        <UserTradesModal
-          user={viewingUserTrades}
-          onClose={() => setViewingUserTrades(null)}
-        />
-      )}
+      {resolving && <ResolveModal bet={resolving} onClose={() => setResolving(null)} onDone={(msg) => { showToast(msg); refreshBets(); }} />}
+      {viewingBet && <BetDetailModal bet={viewingBet} onClose={() => setViewingBet(null)} />}
+      {adjustingUser && <AdjustCreditsModal user={adjustingUser} onClose={() => setAdjustingUser(null)} onDone={(msg) => { showToast(msg); refreshUsers(); }} />}
+      {viewingUserTrades && <UserTradesModal user={viewingUserTrades} onClose={() => setViewingUserTrades(null)} />}
     </>
   );
 }

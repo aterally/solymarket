@@ -9,30 +9,45 @@ function BetCard({ bet }) {
   const total = (bet.total_yes || 0) + (bet.total_no || 0);
   const yesPct = total > 0 ? Math.round((bet.total_yes / total) * 100) : 50;
   const noPct = 100 - yesPct;
+  const isClosed = bet.status !== 'open';
 
-  return (
-    <Link href={`/bets/${bet.id}`} className="card card-link">
+  const inner = (
+    <>
       <div className="bet-meta">
-        <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           {bet.status === 'resolved' && bet.outcome && (
             <span className={`outcome-badge outcome-${bet.outcome}`}>{bet.outcome}</span>
           )}
           {bet.status === 'refunded' && <span className="status-badge status-refunded">refunded</span>}
           <span className={`status-badge status-${bet.status}`}>{bet.status === 'refunded' ? '' : bet.status}</span>
         </div>
-        <span style={{ fontSize: '0.7rem', color: 'var(--text3)' }}>{bet.participant_count || 0} bets</span>
+        <span style={{ fontSize: '0.8rem', color: 'var(--text3)' }}>{bet.participant_count || 0} bets</span>
       </div>
-      <div className="bet-title">{bet.title}</div>
+      <div className="bet-title" style={{ color: isClosed ? 'var(--text3)' : 'var(--text)' }}>{bet.title}</div>
       {bet.description && <div className="bet-desc">{bet.description}</div>}
-      <div className="bar-container" style={{ marginBottom: 5 }}>
+      <div className="bar-container" style={{ marginBottom: 6 }}>
         <div className="bar-yes" style={{ width: yesPct + '%' }} />
         <div className="bar-no" style={{ width: noPct + '%' }} />
       </div>
       <div className="bar-labels">
-        <span className="yes-label">YES {yesPct}%</span>
+        <span className="yes-label" style={{ color: isClosed ? 'var(--text3)' : undefined }}>YES {yesPct}%</span>
         <span className="total-pool">{total} sl</span>
-        <span className="no-label">{noPct}% NO</span>
+        <span className="no-label" style={{ color: isClosed ? 'var(--text3)' : undefined }}>{noPct}% NO</span>
       </div>
+    </>
+  );
+
+  if (isClosed) {
+    return (
+      <div className="card" style={{ opacity: 0.45, cursor: 'default', pointerEvents: 'none' }}>
+        {inner}
+      </div>
+    );
+  }
+
+  return (
+    <Link href={`/bets/${bet.id}`} className="card card-link">
+      {inner}
     </Link>
   );
 }
@@ -82,7 +97,6 @@ function CreateBetModal({ onClose, onCreated }) {
   );
 }
 
-// Sort: all open first, then closed/resolved/refunded
 function sortBets(bets) {
   return [...bets].sort((a, b) => {
     const aOpen = a.status === 'open' ? 0 : 1;
@@ -117,7 +131,7 @@ export default function Home() {
         <div className="sign-in-tagline">Prediction markets. Start with 100 solies.</div>
         <div className="sign-in-card">
           <button className="google-btn" onClick={() => signIn('google')}>
-            <svg width="16" height="16" viewBox="0 0 18 18">
+            <svg width="18" height="18" viewBox="0 0 18 18">
               <path fill="#4285F4" d="M16.51 8H8.98v3h4.3c-.18 1-.74 1.48-1.6 2.04v2.01h2.6a7.8 7.8 0 0 0 2.38-5.88c0-.57-.05-.66-.15-1.18z"/>
               <path fill="#34A853" d="M8.98 17c2.16 0 3.97-.72 5.3-1.94l-2.6-2.04a4.8 4.8 0 0 1-7.18-2.54H1.83v2.07A8 8 0 0 0 8.98 17z"/>
               <path fill="#FBBC05" d="M4.5 10.48A4.8 4.8 0 0 1 4.5 7.5V5.43H1.83a8 8 0 0 0 0 7.14l2.67-2.1z"/>
@@ -141,24 +155,20 @@ export default function Home() {
       {showUsername && <UsernameModal onDone={() => setShowUsername(false)} />}
       <div className="page">
         <div className="page-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div>
-            <h1>Markets</h1>
-          </div>
+          <h1>Markets</h1>
           <button className="btn btn-primary" onClick={() => setShowCreate(true)}>+ New</button>
         </div>
 
         <div className="tabs">
           {[['all', 'All'], ['open', 'Open'], ['closed', 'Closed']].map(([val, label]) => (
-            <button key={val} className={`tab${filter === val ? ' active' : ''}`} onClick={() => setFilter(val)}>
-              {label}
-            </button>
+            <button key={val} className={`tab${filter === val ? ' active' : ''}`} onClick={() => setFilter(val)}>{label}</button>
           ))}
         </div>
 
         {loading ? (
           <div className="loading">loading</div>
         ) : filtered.length === 0 ? (
-          <div className="empty">No markets. <button className="btn btn-ghost" style={{ marginLeft: 8 }} onClick={() => setShowCreate(true)}>Create one</button></div>
+          <div className="empty">No markets. <button className="btn btn-ghost" style={{ marginLeft: 10 }} onClick={() => setShowCreate(true)}>Create one</button></div>
         ) : (
           <div className="bet-grid">
             {filtered.map(bet => <BetCard key={bet.id} bet={bet} />)}
