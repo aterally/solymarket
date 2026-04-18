@@ -246,7 +246,34 @@ export default function BetPage({ params }) {
             {isAdmin && <AdminSidebar bet={bet} onResolved={load} />}
 
             {/* Regular bet placement for non-admins or if admin hasn't bet */}
-            {!isAdmin && (myPosition ? (\n              <div className="card">\n                <div style={{ fontSize: '0.7rem', color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 10, fontWeight: 500 }}>\n                  Your position\n                </div>\n                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>\n                  <span style={{ color: myPosition.side === 'yes' ? 'var(--yes)' : 'var(--no)', fontWeight: 600, fontSize: '1rem' }}>\n                    {myPosition.side.toUpperCase()}\n                  </span>\n                  <span style={{ fontSize: '0.88rem' }}>{myPosition.amount} sl</span>\n                </div>\n                {bet.status === 'resolved' && (() => {\n                  const t = (bet.total_yes || 0) + (bet.total_no || 0);\n                  const winnerPool = bet.outcome === 'yes' ? (bet.total_yes || 0) : (bet.total_no || 0);\n                  const won = myPosition.side === bet.outcome;\n                  const payout = won && winnerPool > 0 ? Math.round((myPosition.amount / winnerPool) * t) : 0;\n                  const pnl = won ? payout - myPosition.amount : -myPosition.amount;\n                  return (\n                    <div style={{ marginTop: 10, fontSize: '0.85rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>\n                      <span style={{ color: won ? 'var(--yes)' : 'var(--no)' }}>{won ? '✓ You won' : '✗ You lost'}</span>\n                      <span style={{ color: pnl >= 0 ? 'var(--yes)' : 'var(--no)', fontWeight: 700 }}>{pnl >= 0 ? '+' : ''}{pnl} sl</span>\n                    </div>\n                  );\n                })()}\n                {bet.status === 'refunded' && (\n                  <div style={{ marginTop: 10, fontSize: '0.8rem', color: 'var(--text2)' }}>Refunded</div>\n                )}\n              </div>
+            {!isAdmin && (myPosition ? (
+              <div className="card">
+                <div style={{ fontSize: '0.7rem', color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 10, fontWeight: 500 }}>
+                  Your position
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <span style={{ color: myPosition.side === 'yes' ? 'var(--yes)' : 'var(--no)', fontWeight: 600, fontSize: '1rem' }}>
+                    {myPosition.side.toUpperCase()}
+                  </span>
+                  <span style={{ fontSize: '0.88rem' }}>{myPosition.amount} sl</span>
+                </div>
+                {bet.status === 'resolved' && (() => {
+                  const t = (bet.total_yes || 0) + (bet.total_no || 0);
+                  const winnerPool = bet.outcome === 'yes' ? (bet.total_yes || 0) : (bet.total_no || 0);
+                  const won = myPosition.side === bet.outcome;
+                  const payout = won && winnerPool > 0 ? Math.round((myPosition.amount / winnerPool) * t) : 0;
+                  const pnl = won ? payout - myPosition.amount : -myPosition.amount;
+                  return (
+                    <div style={{ marginTop: 10, fontSize: '0.85rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ color: won ? 'var(--yes)' : 'var(--no)' }}>{won ? '✓ You won' : '✗ You lost'}</span>
+                      <span style={{ color: pnl >= 0 ? 'var(--yes)' : 'var(--no)', fontWeight: 700 }}>{pnl >= 0 ? '+' : ''}{pnl} sl</span>
+                    </div>
+                  );
+                })()}
+                {bet.status === 'refunded' && (
+                  <div style={{ marginTop: 10, fontSize: '0.8rem', color: 'var(--text2)' }}>Refunded</div>
+                )}
+              </div>
             ) : bet.status === 'open' && session ? (
               <div className="card">
                 <div style={{ fontSize: '0.7rem', color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 14, fontWeight: 500 }}>
