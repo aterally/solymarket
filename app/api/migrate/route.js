@@ -1,4 +1,3 @@
-// app/api/migrate/route.js
 import { sql } from '@vercel/postgres';
 import { NextResponse } from 'next/server';
 
@@ -14,12 +13,18 @@ export async function GET(req) {
         id TEXT PRIMARY KEY,
         email TEXT UNIQUE NOT NULL,
         name TEXT,
+        username TEXT UNIQUE,
         image TEXT,
         credits INTEGER DEFAULT 100,
         is_admin BOOLEAN DEFAULT FALSE,
+        is_banned BOOLEAN DEFAULT FALSE,
         created_at TIMESTAMPTZ DEFAULT NOW()
       )
     `;
+
+    // Add columns if upgrading existing DB
+    await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS username TEXT UNIQUE`;
+    await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS is_banned BOOLEAN DEFAULT FALSE`;
 
     await sql`
       CREATE TABLE IF NOT EXISTS bets (

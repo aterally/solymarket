@@ -1,4 +1,3 @@
-// app/api/bets/route.js
 import { getServerSession } from 'next-auth';
 import { sql } from '@vercel/postgres';
 import { NextResponse } from 'next/server';
@@ -6,7 +5,8 @@ import { NextResponse } from 'next/server';
 export async function GET() {
   try {
     const { rows } = await sql`
-      SELECT b.*, u.name as creator_name,
+      SELECT b.*,
+        COALESCE(u.username, u.name) as creator_name,
         (SELECT COUNT(*) FROM bet_positions WHERE bet_id = b.id) as participant_count
       FROM bets b
       LEFT JOIN users u ON b.creator_id = u.id
@@ -25,12 +25,11 @@ export async function POST(req) {
   }
 
   const { title, description } = await req.json();
-  if (!title?.trim()) {
-    return NextResponse.json({ error: 'Title required' }, { status: 400 });
-  }
+  if (!title?.trim()) return NextResponse.json({ error: 'Title required' }, { status: 400 });
 
-  const { rows: userRows } = await sql`SELECT id FROM users WHERE email = ${session.user.email}`;
+  const { rows: userRows } = await sql`SELECT id, is_banned FROM users WHERE email = ${session.user.email}`;
   if (!userRows[0]) return NextResponse.json({ error: 'User not found' }, { status: 404 });
+  if (userRows[0].is_banned) return NextResponse.json({ error: 'Account banned' }, { status: 403 });
 
   const { rows } = await sql`
     INSERT INTO bets (title, description, creator_id, status)

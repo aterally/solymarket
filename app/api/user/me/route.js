@@ -1,4 +1,3 @@
-// app/api/user/me/route.js
 import { getServerSession } from 'next-auth';
 import { sql } from '@vercel/postgres';
 import { NextResponse } from 'next/server';
@@ -9,7 +8,10 @@ export async function GET() {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const { rows } = await sql`SELECT id, email, name, image, credits, is_admin FROM users WHERE email = ${session.user.email}`;
+  const { rows } = await sql`
+    SELECT id, email, name, username, image, credits, is_admin, is_banned
+    FROM users WHERE email = ${session.user.email}
+  `;
   if (!rows[0]) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
   const { rows: positions } = await sql`

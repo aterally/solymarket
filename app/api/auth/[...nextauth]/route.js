@@ -1,4 +1,3 @@
-// app/api/auth/[...nextauth]/route.js
 import NextAuth from 'next-auth';
 import GoogleProvider from 'next-auth/providers/google';
 import { sql } from '@vercel/postgres';
@@ -13,20 +12,17 @@ const handler = NextAuth({
   callbacks: {
     async signIn({ user }) {
       try {
-        const existing = await sql`SELECT id FROM users WHERE email = ${user.email}`;
-        if (existing.rows.length === 0) {
+        const { rows: existing } = await sql`SELECT id, is_banned FROM users WHERE email = ${user.email}`;
+        if (existing.length === 0) {
           const isAdmin = user.email === process.env.ADMIN_EMAIL;
           await sql`
-            INSERT INTO users (id, email, name, image, credits, is_admin)
-            VALUES (${user.id}, ${user.email}, ${user.name}, ${user.image}, 100, ${isAdmin})
+            INSERT INTO users (id, email, name, image, credits, is_admin, is_banned)
+            VALUES (${user.id}, ${user.email}, ${user.name}, ${user.image}, 100, ${isAdmin}, FALSE)
           `;
         } else {
-          // Update name/image and ensure admin flag is set correctly
+          if (existing[0].is_banned) return false; // block banned users
           const isAdmin = user.email === process.env.ADMIN_EMAIL;
-          await sql`
-            UPDATE users SET name = ${user.name}, image = ${user.image}, is_admin = ${isAdmin}
-            WHERE email = ${user.email}
-          `;
+          await sql`UPDATE users SET name = ${user.name}, image = ${user.image}, is_admin = ${isAdmin} WHERE email = ${user.email}`;
         }
         return true;
       } catch (err) {
@@ -41,15 +37,14 @@ const handler = NextAuth({
           session.user.id = rows[0].id;
           session.user.credits = rows[0].credits;
           session.user.isAdmin = rows[0].is_admin;
-          session.user.dbId = rows[0].id;
+          session.user.username = rows[0].username;
+          session.user.hasUsername = !!rows[0].username;
         }
       }
       return session;
     },
   },
-  pages: {
-    signIn: '/',
-  },
+  pages: { signIn: '/' },
   secret: process.env.NEXTAUTH_SECRET,
 });
 

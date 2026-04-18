@@ -1,0 +1,54 @@
+'use client';
+import { useSession } from 'next-auth/react';
+import { useEffect, useState } from 'react';
+import { Navbar } from '../Navbar';
+import Link from 'next/link';
+
+export default function LeaderboardPage() {
+  const { data: session } = useSession();
+  const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch('/api/leaderboard').then(r => r.json()).then(d => { setRows(Array.isArray(d) ? d : []); setLoading(false); });
+  }, []);
+
+  const medals = ['🥇', '🥈', '🥉'];
+
+  return (
+    <>
+      <Navbar />
+      <div className="page-sm">
+        <Link href="/" style={{ color: 'var(--text3)', fontSize: '0.78rem', display: 'inline-block', marginBottom: 24 }}>← back</Link>
+        <div className="page-header">
+          <h1>Leaderboard</h1>
+          <p>Top 10 by credits</p>
+        </div>
+
+        {loading ? (
+          <div className="loading">loading</div>
+        ) : rows.length === 0 ? (
+          <div className="empty">No data yet.</div>
+        ) : (
+          <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+            {rows.map((row, i) => {
+              const isMe = session?.user?.username === row.display_name || session?.user?.name === row.display_name;
+              return (
+                <div key={i} className="lb-row" style={{ padding: '11px 18px', background: isMe ? 'var(--surface)' : 'transparent' }}>
+                  <div className="lb-rank">
+                    {i < 3 ? medals[i] : <span style={{ fontFamily: 'var(--font-mono)' }}>{i + 1}</span>}
+                  </div>
+                  <div className="lb-name" style={{ fontWeight: isMe ? 600 : 500 }}>
+                    {row.display_name}
+                    {isMe && <span style={{ color: 'var(--text3)', fontWeight: 400, fontSize: '0.72rem', marginLeft: 6 }}>you</span>}
+                  </div>
+                  <div className="lb-credits">{row.credits} cr</div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </>
+  );
+}
