@@ -47,3 +47,4 @@ export function Navbar() {
     </nav>
   );
 }
+
