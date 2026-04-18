@@ -1,7 +1,7 @@
 'use client';
 import { useSession, signIn } from 'next-auth/react';
 import { useEffect, useState } from 'react';
-import { Navbar } from '../components/Navbar';
+import { Navbar } from './Navbar';
 import Link from 'next/link';
 
 function BetCard({ bet }) {
