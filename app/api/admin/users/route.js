@@ -8,7 +8,6 @@ async function requireAdmin(session) {
   return rows[0]?.is_admin === true;
 }
 
-// GET all users (admin) or single user trades (?userId=xxx)
 export async function GET(req) {
   const session = await getServerSession();
   if (!await requireAdmin(session)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
@@ -17,19 +16,15 @@ export async function GET(req) {
   const createdBy = req.nextUrl.searchParams.get('createdBy');
 
   if (createdBy) {
-    // Return markets created by a specific user
     const { rows } = await sql`
       SELECT id, title, status, outcome, created_at,
              (SELECT COUNT(*) FROM bet_positions WHERE bet_id = bets.id) as participant_count
-      FROM bets
-      WHERE creator_id = ${createdBy}
-      ORDER BY created_at DESC
+      FROM bets WHERE creator_id = ${createdBy} ORDER BY created_at DESC
     `;
     return NextResponse.json(rows);
   }
 
   if (userId) {
-    // Return trade history for a specific user
     const { rows } = await sql`
       SELECT bp.id, bp.side, bp.amount, bp.created_at,
              b.id as bet_id, b.title, b.status, b.outcome
@@ -49,7 +44,6 @@ export async function GET(req) {
   return NextResponse.json(rows);
 }
 
-// POST actions: adjust_credits, ban, unban
 export async function POST(req) {
   const session = await getServerSession();
   if (!await requireAdmin(session)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });

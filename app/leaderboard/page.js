@@ -13,14 +13,14 @@ export default function LeaderboardPage() {
     fetch('/api/leaderboard').then(r => r.json()).then(d => { setRows(Array.isArray(d) ? d : []); setLoading(false); });
   }, []);
 
-  const medals = ['🥇', '🥈', '🥉'];
-  // Use numbers for all ranks
-
   return (
     <>
       <Navbar />
       <div className="page-sm">
-        <Link href="/" style={{ color: 'var(--text3)', fontSize: '0.78rem', display: 'inline-block', marginBottom: 24 }}>← back</Link>
+        <Link href="/" style={{ color: 'var(--text3)', fontSize: '0.82rem', display: 'inline-flex', alignItems: 'center', gap: 4, marginBottom: 28 }}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="15 18 9 12 15 6"/></svg>
+          Back
+        </Link>
         <div className="page-header">
           <h1>Leaderboard</h1>
           <p>Top 15 by solies</p>
@@ -41,14 +41,12 @@ export default function LeaderboardPage() {
                   key={i}
                   href={`/user/${encodeURIComponent(row.display_name)}`}
                   className="lb-row"
-                  style={{ background: isMe ? 'var(--surface2)' : 'transparent', textDecoration: 'none' }}
+                  style={{ background: isMe ? 'var(--surface2)' : 'transparent' }}
                 >
-                  <div className="lb-rank">
-                    <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 700 }}>{i + 1}.</span>
-                  </div>
-                  <div className="lb-name" style={{ fontWeight: isMe ? 600 : 500 }}>
+                  <div className="lb-rank">{i + 1}.</div>
+                  <div className="lb-name" style={{ fontWeight: isMe ? 700 : 500 }}>
                     {row.display_name}
-                    {isMe && <span style={{ color: 'var(--text3)', fontWeight: 400, fontSize: '0.72rem', marginLeft: 6 }}>you</span>}
+                    {isMe && <span style={{ color: 'var(--text3)', fontWeight: 400, fontSize: '0.75rem', marginLeft: 8 }}>you</span>}
                   </div>
                   <div className="lb-credits">{row.credits} sl</div>
                 </Link>

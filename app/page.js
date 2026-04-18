@@ -13,23 +13,24 @@ function BetCard({ bet }) {
 
   const inner = (
     <>
-      <div className="bet-meta" style={{ justifyContent: 'flex-start', gap: 8 }}>
+      <div className="bet-meta">
         {bet.status === 'resolved' && bet.outcome && (
           <span className={`outcome-badge outcome-${bet.outcome}`}>{bet.outcome.toUpperCase()}</span>
         )}
         {bet.status === 'refunded' && <span className="status-badge status-refunded">REFUNDED</span>}
-        <span style={{ fontSize: '0.8rem', color: 'var(--text3)' }}>{bet.participant_count || 0} bets</span>
+        {bet.status === 'open' && <span className="status-badge status-open">OPEN</span>}
+        <span style={{ fontSize: '0.8rem', color: 'var(--text3)', marginLeft: 'auto' }}>{bet.participant_count || 0} bets</span>
       </div>
-      <div className="bet-title" style={{ color: isClosed ? 'var(--text3)' : 'var(--text)' }}>{bet.title}</div>
+      <div className="bet-title" style={{ color: isClosed ? 'var(--text2)' : 'var(--text)' }}>{bet.title}</div>
       {bet.description && <div className="bet-desc">{bet.description}</div>}
-      <div className="bar-container" style={{ marginBottom: 6 }}>
+      <div className="bar-container" style={{ marginBottom: 8 }}>
         <div className="bar-yes" style={{ width: yesPct + '%' }} />
         <div className="bar-no" style={{ width: noPct + '%' }} />
       </div>
       <div className="bar-labels">
-        <span className="yes-label" style={{ color: isClosed ? 'var(--text3)' : undefined }}>YES {yesPct}%</span>
-        <span className="total-pool" style={{ color: 'var(--text3)', fontSize: '0.78rem' }}>{total} sl pool</span>
-        <span className="no-label" style={{ color: isClosed ? 'var(--text3)' : undefined }}>{noPct}% NO</span>
+        <span className="yes-label">YES {yesPct}%</span>
+        <span className="total-pool">{total} sl pool</span>
+        <span className="no-label">{noPct}% NO</span>
       </div>
     </>
   );
@@ -152,8 +153,11 @@ export default function Home() {
       {showUsername && <UsernameModal onDone={() => setShowUsername(false)} />}
       <div className="page">
         <div className="page-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <h1>Markets</h1>
-          <button className="btn btn-primary" onClick={() => setShowCreate(true)}>+ New</button>
+          <div>
+            <h1>Markets</h1>
+            <p>{bets.filter(b => b.status === 'open').length} open markets</p>
+          </div>
+          <button className="btn btn-primary" onClick={() => setShowCreate(true)}>+ New market</button>
         </div>
 
         <div className="tabs">
