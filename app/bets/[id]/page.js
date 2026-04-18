@@ -1,7 +1,7 @@
 'use client';
 import { useSession } from 'next-auth/react';
 import { useEffect, useState } from 'react';
-import { Navbar } from '../../components/Navbar';
+import { Navbar } from '../Navbar';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 
