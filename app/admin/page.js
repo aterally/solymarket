@@ -13,12 +13,10 @@ function ResolveModal({ bet, onClose, onDone }) {
   async function resolve() {
     setLoading(true); setErr('');
     const res = await fetch('/api/admin/resolve', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ betId: bet.id, outcome }),
     });
-    const d = await res.json();
-    setLoading(false);
+    const d = await res.json(); setLoading(false);
     if (!res.ok) return setErr(d.error);
     onDone(`Resolved as ${outcome.toUpperCase()}. ${d.winnersCount} winner(s), ${d.totalPool} sl pool.`);
     onClose();
@@ -27,12 +25,10 @@ function ResolveModal({ bet, onClose, onDone }) {
   async function refund() {
     setLoading(true); setErr('');
     const res = await fetch('/api/admin/refund', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ betId: bet.id }),
     });
-    const d = await res.json();
-    setLoading(false);
+    const d = await res.json(); setLoading(false);
     if (!res.ok) return setErr(d.error);
     onDone(`Refunded ${d.refunded} participant(s).`);
     onClose();
@@ -91,6 +87,18 @@ function BetDetailModal({ bet, onClose }) {
     });
   }, [bet.id]);
 
+  function getPnl(p) {
+    if (bet.status === 'refunded') return null;
+    if (bet.status !== 'resolved') return null;
+    const total = (bet.total_yes || 0) + (bet.total_no || 0);
+    const winPool = bet.outcome === 'yes' ? (bet.total_yes || 0) : (bet.total_no || 0);
+    if (p.side === bet.outcome) {
+      if (winPool === 0) return null;
+      return Math.round((p.amount / winPool) * total) - p.amount;
+    }
+    return -p.amount;
+  }
+
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" style={{ maxWidth: 540 }} onClick={e => e.stopPropagation()}>
@@ -102,15 +110,26 @@ function BetDetailModal({ bet, onClose }) {
           <div style={{ color: 'var(--text3)', padding: '12px 0' }}>No positions yet.</div>
         ) : (
           <table className="admin-table">
-            <thead><tr><th>User</th><th>Side</th><th>Amount</th></tr></thead>
+            <thead><tr><th>User</th><th>Side</th><th>Amount</th><th>P&amp;L</th></tr></thead>
             <tbody>
-              {positions.map((p, i) => (
-                <tr key={i}>
-                  <td>{p.user_name}</td>
-                  <td><span style={{ color: p.side === 'yes' ? 'var(--yes)' : 'var(--no)', fontWeight: 700 }}>{p.side.toUpperCase()}</span></td>
-                  <td style={{ fontFamily: 'var(--font-mono)' }}>{p.amount} sl</td>
-                </tr>
-              ))}
+              {positions.map((p, i) => {
+                const pnl = getPnl(p);
+                return (
+                  <tr key={i}>
+                    <td>{p.user_name}</td>
+                    <td><span style={{ color: p.side === 'yes' ? 'var(--yes)' : 'var(--no)', fontWeight: 700 }}>{p.side.toUpperCase()}</span></td>
+                    <td style={{ fontFamily: 'var(--font-mono)' }}>{p.amount} sl</td>
+                    <td style={{ fontFamily: 'var(--font-mono)', fontWeight: 600 }}>
+                      {bet.status === 'refunded'
+                        ? <span style={{ color: 'var(--text3)' }}>refunded</span>
+                        : pnl === null
+                          ? <span style={{ color: 'var(--text3)' }}>—</span>
+                          : <span style={{ color: pnl >= 0 ? 'var(--yes)' : 'var(--no)' }}>{pnl >= 0 ? '+' : ''}{pnl} sl</span>
+                      }
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         )}
@@ -125,12 +144,18 @@ function BetDetailModal({ bet, onClose }) {
 // ── User Trades Modal ──────────────────────────────────────────
 function UserTradesModal({ user, onClose }) {
   const [trades, setTrades] = useState([]);
+  const [createdMarkets, setCreatedMarkets] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch(`/api/admin/users?userId=${user.id}`)
-      .then(r => r.json())
-      .then(d => { setTrades(Array.isArray(d) ? d : []); setLoading(false); });
+    Promise.all([
+      fetch(`/api/admin/users?userId=${user.id}`).then(r => r.json()),
+      fetch(`/api/admin/users?createdBy=${user.id}`).then(r => r.json()),
+    ]).then(([tradesData, marketsData]) => {
+      setTrades(Array.isArray(tradesData) ? tradesData : []);
+      setCreatedMarkets(Array.isArray(marketsData) ? marketsData : []);
+      setLoading(false);
+    });
   }, [user.id]);
 
   const won = trades.filter(t => t.status === 'resolved' && t.side === t.outcome).length;
@@ -138,41 +163,73 @@ function UserTradesModal({ user, onClose }) {
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" style={{ maxWidth: 600 }} onClick={e => e.stopPropagation()}>
+      <div className="modal" style={{ maxWidth: 620 }} onClick={e => e.stopPropagation()}>
         <h2>{user.display_name}</h2>
-        <div style={{ display: 'flex', gap: 20, marginBottom: 18, fontSize: '0.85rem', color: 'var(--text2)' }}>
+        <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', marginBottom: 18, fontSize: '0.85rem', color: 'var(--text2)', alignItems: 'center' }}>
           <span>{user.email}</span>
-          <span style={{ fontFamily: 'var(--font-mono)' }}>{user.credits} sl</span>
-          {user.last_ip && <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text3)' }}>{user.last_ip}</span>}
+          <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 600 }}>{user.credits} sl</span>
+          {user.last_ip && (
+            <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text3)', fontSize: '0.78rem', background: 'var(--surface2)', padding: '2px 7px', borderRadius: 4 }}>
+              IP: {user.last_ip}
+            </span>
+          )}
           {won + lost > 0 && <span style={{ color: 'var(--yes)' }}>{Math.round(won / (won + lost) * 100)}% win rate</span>}
         </div>
+
+        {createdMarkets.length > 0 && (
+          <div style={{ marginBottom: 18 }}>
+            <div style={{ fontSize: '0.72rem', color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600, marginBottom: 8 }}>
+              Markets Created ({createdMarkets.length})
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              {createdMarkets.map((m, i) => (
+                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.82rem', padding: '6px 10px', background: 'var(--surface2)', borderRadius: 5 }}>
+                  <Link href={`/bets/${m.id}`} style={{ color: 'var(--text2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '75%' }}>
+                    {m.title}
+                  </Link>
+                  <span className={`status-badge status-${m.status}`} style={{ fontSize: '0.68rem', flexShrink: 0 }}>{m.status}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {loading ? (
           <div style={{ padding: '20px 0', color: 'var(--text3)' }}>loading...</div>
         ) : trades.length === 0 ? (
           <div style={{ color: 'var(--text3)', padding: '12px 0' }}>No trades yet.</div>
         ) : (
-          <div style={{ maxHeight: 400, overflowY: 'auto' }}>
-            <table className="admin-table">
-              <thead><tr><th>Market</th><th>Side</th><th>Amount</th><th>Result</th></tr></thead>
-              <tbody>
-                {trades.map((t, i) => (
-                  <tr key={i}>
-                    <td style={{ maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      <Link href={`/bets/${t.bet_id}`} style={{ color: 'var(--text2)' }}>{t.title}</Link>
-                    </td>
-                    <td><span style={{ color: t.side === 'yes' ? 'var(--yes)' : 'var(--no)', fontWeight: 700 }}>{t.side.toUpperCase()}</span></td>
-                    <td style={{ fontFamily: 'var(--font-mono)' }}>{t.amount} sl</td>
-                    <td>
-                      {t.status === 'resolved'
-                        ? <span style={{ color: t.side === t.outcome ? 'var(--yes)' : 'var(--no)', fontWeight: 600 }}>{t.side === t.outcome ? '✓ Won' : '✗ Lost'}</span>
-                        : <span className={`status-badge status-${t.status}`}>{t.status}</span>
-                      }
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <>
+            <div style={{ fontSize: '0.72rem', color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600, marginBottom: 8 }}>
+              Trade History ({trades.length})
+            </div>
+            <div style={{ maxHeight: 320, overflowY: 'auto' }}>
+              <table className="admin-table">
+                <thead><tr><th>Market</th><th>Side</th><th>Amount</th><th>Result</th></tr></thead>
+                <tbody>
+                  {trades.map((t, i) => (
+                    <tr key={i}>
+                      <td style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        <Link href={`/bets/${t.bet_id}`} style={{ color: 'var(--text2)' }}>{t.title}</Link>
+                      </td>
+                      <td><span style={{ color: t.side === 'yes' ? 'var(--yes)' : 'var(--no)', fontWeight: 700 }}>{t.side.toUpperCase()}</span></td>
+                      <td style={{ fontFamily: 'var(--font-mono)' }}>{t.amount} sl</td>
+                      <td>
+                        {t.status === 'refunded'
+                          ? <span style={{ color: 'var(--text3)', fontSize: '0.8rem' }}>refunded</span>
+                          : t.status === 'resolved'
+                            ? <span style={{ color: t.side === t.outcome ? 'var(--yes)' : 'var(--no)', fontWeight: 600 }}>
+                                {t.side === t.outcome ? '✓ Won' : '✗ Lost'}
+                              </span>
+                            : <span className={`status-badge status-${t.status}`}>{t.status}</span>
+                        }
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
         <div className="modal-actions">
           <button className="btn btn-ghost" onClick={onClose} style={{ flex: 1, justifyContent: 'center' }}>Close</button>
@@ -189,22 +246,17 @@ function AdjustCreditsModal({ user, onClose, onDone }) {
   const [err, setErr] = useState('');
 
   async function adjust() {
-    const delta = parseInt(amount);
-    setLoading(true); setErr('');
+    const delta = parseInt(amount); setLoading(true); setErr('');
     const res = await fetch('/api/admin/users', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'adjust_credits', userId: user.id, amount: delta }),
     });
-    const d = await res.json();
-    setLoading(false);
+    const d = await res.json(); setLoading(false);
     if (!res.ok) return setErr(d.error);
-    onDone(`${user.display_name} now has ${d.credits} sl`);
-    onClose();
+    onDone(`${user.display_name} now has ${d.credits} sl`); onClose();
   }
 
   const parsed = parseInt(amount);
-
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" onClick={e => e.stopPropagation()}>
@@ -228,6 +280,41 @@ function AdjustCreditsModal({ user, onClose, onDone }) {
   );
 }
 
+// ── Delete Confirm Modal ───────────────────────────────────────
+function DeleteMarketModal({ bet, onClose, onDone }) {
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState('');
+
+  async function deleteBet() {
+    setLoading(true); setErr('');
+    const res = await fetch('/api/admin/delete', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ betId: bet.id }),
+    });
+    const d = await res.json(); setLoading(false);
+    if (!res.ok) return setErr(d.error);
+    onDone(`Market deleted.`); onClose();
+  }
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" onClick={e => e.stopPropagation()}>
+        <h2>Delete market</h2>
+        <p style={{ color: 'var(--text2)', fontSize: '0.95rem', marginBottom: 18, lineHeight: 1.5 }}>
+          Permanently delete <strong>{bet.title}</strong>? This cannot be undone.
+        </p>
+        {err && <div className="error-msg">{err}</div>}
+        <div className="modal-actions">
+          <button className="btn btn-ghost" onClick={onClose} style={{ flex: 1 }}>Cancel</button>
+          <button className="btn btn-danger" onClick={deleteBet} disabled={loading} style={{ flex: 2, justifyContent: 'center' }}>
+            {loading ? '...' : 'Delete permanently'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Main Admin Page ────────────────────────────────────────────
 export default function AdminPage() {
   const { data: session, status } = useSession();
@@ -239,6 +326,7 @@ export default function AdminPage() {
   const [marketFilter, setMarketFilter] = useState('all');
   const [resolving, setResolving] = useState(null);
   const [viewingBet, setViewingBet] = useState(null);
+  const [deletingBet, setDeletingBet] = useState(null);
   const [adjustingUser, setAdjustingUser] = useState(null);
   const [viewingUserTrades, setViewingUserTrades] = useState(null);
   const [toast, setToast] = useState('');
@@ -261,14 +349,12 @@ export default function AdminPage() {
   async function toggleBan(user) {
     const action = user.is_banned ? 'unban' : 'ban';
     const res = await fetch('/api/admin/users', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action, userId: user.id }),
     });
     if (res.ok) { showToast(`${user.display_name} ${action === 'ban' ? 'banned' : 'unbanned'}`); refreshUsers(); }
   }
 
-  // Wait for session to fully load
   if (status === 'loading') return <><Navbar /><div className="loading">loading...</div></>;
 
   if (status !== 'authenticated' || !session?.user?.isAdmin) {
@@ -306,7 +392,6 @@ export default function AdminPage() {
 
         <div className="page-header"><h1>Admin</h1></div>
 
-        {/* Summary stats */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 28 }}>
           {[
             { label: 'Markets', val: bets.length },
@@ -323,10 +408,11 @@ export default function AdminPage() {
 
         <div className="tabs">
           <button className={`tab${tab === 'markets' ? ' active' : ''}`} onClick={() => setTab('markets')}>Markets</button>
-          <button className={`tab${tab === 'users' ? ' active' : ''}`} onClick={() => setTab('users')}>Users</button>
+          <button className={`tab${tab === 'users' ? ' active' : ''}`} onClick={() => setTab('users')}>
+            Users {usersLoading ? '' : `(${users.length})`}
+          </button>
         </div>
 
-        {/* ── MARKETS TAB ── */}
         {tab === 'markets' && (
           <>
             <div className="tabs" style={{ marginBottom: 20 }}>
@@ -341,7 +427,7 @@ export default function AdminPage() {
                   const yesPct = total > 0 ? Math.round((bet.total_yes / total) * 100) : 50;
                   const isClosed = bet.status !== 'open';
                   return (
-                    <div key={bet.id} className="card" style={{ display: 'flex', alignItems: 'center', gap: 18, opacity: isClosed ? 0.55 : 1 }}>
+                    <div key={bet.id} className="card" style={{ display: 'flex', alignItems: 'center', gap: 18, opacity: isClosed ? 0.72 : 1 }}>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 7 }}>
                           <span className={`status-badge status-${bet.status}`}>{bet.status}</span>
@@ -355,15 +441,16 @@ export default function AdminPage() {
                         </div>
                         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem' }}>
                           <span className="yes-label">YES {bet.total_yes || 0} sl</span>
-                          <span style={{ color: 'var(--text3)' }}>{bet.participant_count || 0} participants</span>
+                          <span style={{ color: 'var(--text3)' }}>{total} sl pool · {bet.participant_count || 0} participants</span>
                           <span className="no-label">{bet.total_no || 0} sl NO</span>
                         </div>
                       </div>
                       <div style={{ display: 'flex', gap: 7, flexShrink: 0 }}>
                         <button className="btn btn-ghost" style={{ fontSize: '0.82rem' }} onClick={() => setViewingBet(bet)}>Details</button>
-                        {!isClosed && (
-                          <button className="btn btn-primary" style={{ fontSize: '0.82rem' }} onClick={() => setResolving(bet)}>Close</button>
-                        )}
+                        {!isClosed
+                          ? <button className="btn btn-primary" style={{ fontSize: '0.82rem' }} onClick={() => setResolving(bet)}>Close</button>
+                          : <button className="btn btn-danger" style={{ fontSize: '0.82rem' }} onClick={() => setDeletingBet(bet)}>Delete</button>
+                        }
                       </div>
                     </div>
                   );
@@ -373,18 +460,13 @@ export default function AdminPage() {
           </>
         )}
 
-        {/* ── USERS TAB ── */}
         {tab === 'users' && (
           usersLoading ? <div className="loading">loading</div> : users.length === 0 ? <div className="empty">No users yet.</div> : (
             <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
               <table className="admin-table">
                 <thead>
                   <tr>
-                    <th>User</th>
-                    <th>Solies</th>
-                    <th>IP</th>
-                    <th>Status</th>
-                    <th>Actions</th>
+                    <th>User</th><th>Solies</th><th>IP</th><th>Status</th><th>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -409,11 +491,7 @@ export default function AdminPage() {
                         <div style={{ display: 'flex', gap: 6 }}>
                           <button className="btn btn-ghost" style={{ fontSize: '0.8rem', padding: '5px 10px' }} onClick={() => setAdjustingUser(u)}>Solies</button>
                           {!u.is_admin && (
-                            <button
-                              className={`btn ${u.is_banned ? 'btn-ghost' : 'btn-danger'}`}
-                              style={{ fontSize: '0.8rem', padding: '5px 10px' }}
-                              onClick={() => toggleBan(u)}
-                            >
+                            <button className={`btn ${u.is_banned ? 'btn-ghost' : 'btn-danger'}`} style={{ fontSize: '0.8rem', padding: '5px 10px' }} onClick={() => toggleBan(u)}>
                               {u.is_banned ? 'Unban' : 'Ban'}
                             </button>
                           )}
@@ -430,6 +508,7 @@ export default function AdminPage() {
 
       {resolving && <ResolveModal bet={resolving} onClose={() => setResolving(null)} onDone={(msg) => { showToast(msg); refreshBets(); }} />}
       {viewingBet && <BetDetailModal bet={viewingBet} onClose={() => setViewingBet(null)} />}
+      {deletingBet && <DeleteMarketModal bet={deletingBet} onClose={() => setDeletingBet(null)} onDone={(msg) => { showToast(msg); refreshBets(); }} />}
       {adjustingUser && <AdjustCreditsModal user={adjustingUser} onClose={() => setAdjustingUser(null)} onDone={(msg) => { showToast(msg); refreshUsers(); }} />}
       {viewingUserTrades && <UserTradesModal user={viewingUserTrades} onClose={() => setViewingUserTrades(null)} />}
     </>

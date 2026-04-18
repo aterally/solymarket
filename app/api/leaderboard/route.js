@@ -8,7 +8,7 @@ export async function GET() {
       FROM users
       WHERE is_banned = FALSE
       ORDER BY credits DESC
-      LIMIT 10
+      LIMIT 15
     `;
     return NextResponse.json(rows);
   } catch (err) {

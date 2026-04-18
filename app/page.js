@@ -13,14 +13,11 @@ function BetCard({ bet }) {
 
   const inner = (
     <>
-      <div className="bet-meta">
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          {bet.status === 'resolved' && bet.outcome && (
-            <span className={`outcome-badge outcome-${bet.outcome}`}>{bet.outcome}</span>
-          )}
-          {bet.status === 'refunded' && <span className="status-badge status-refunded">refunded</span>}
-          <span className={`status-badge status-${bet.status}`}>{bet.status === 'refunded' ? '' : bet.status}</span>
-        </div>
+      <div className="bet-meta" style={{ justifyContent: 'flex-start', gap: 8 }}>
+        {bet.status === 'resolved' && bet.outcome && (
+          <span className={`outcome-badge outcome-${bet.outcome}`}>{bet.outcome.toUpperCase()}</span>
+        )}
+        {bet.status === 'refunded' && <span className="status-badge status-refunded">REFUNDED</span>}
         <span style={{ fontSize: '0.8rem', color: 'var(--text3)' }}>{bet.participant_count || 0} bets</span>
       </div>
       <div className="bet-title" style={{ color: isClosed ? 'var(--text3)' : 'var(--text)' }}>{bet.title}</div>
@@ -31,7 +28,7 @@ function BetCard({ bet }) {
       </div>
       <div className="bar-labels">
         <span className="yes-label" style={{ color: isClosed ? 'var(--text3)' : undefined }}>YES {yesPct}%</span>
-        <span className="total-pool">{total} sl</span>
+        <span className="total-pool" style={{ color: 'var(--text3)', fontSize: '0.78rem' }}>{total} sl pool</span>
         <span className="no-label" style={{ color: isClosed ? 'var(--text3)' : undefined }}>{noPct}% NO</span>
       </div>
     </>
@@ -39,7 +36,7 @@ function BetCard({ bet }) {
 
   if (isClosed) {
     return (
-      <div className="card" style={{ opacity: 0.45, cursor: 'default', pointerEvents: 'none' }}>
+      <div className="card" style={{ opacity: 0.72, cursor: 'default', pointerEvents: 'none' }}>
         {inner}
       </div>
     );

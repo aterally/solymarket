@@ -14,6 +14,19 @@ export async function GET(req) {
   if (!await requireAdmin(session)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
   const userId = req.nextUrl.searchParams.get('userId');
+  const createdBy = req.nextUrl.searchParams.get('createdBy');
+
+  if (createdBy) {
+    // Return markets created by a specific user
+    const { rows } = await sql`
+      SELECT id, title, status, outcome, created_at,
+             (SELECT COUNT(*) FROM bet_positions WHERE bet_id = bets.id) as participant_count
+      FROM bets
+      WHERE creator_id = ${createdBy}
+      ORDER BY created_at DESC
+    `;
+    return NextResponse.json(rows);
+  }
 
   if (userId) {
     // Return trade history for a specific user

@@ -9,6 +9,7 @@ function AdminSidebar({ bet, onResolved }) {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState('');
   const [msg, setMsg] = useState('');
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   async function resolve() {
     setLoading(true); setErr('');
@@ -38,10 +39,39 @@ function AdminSidebar({ bet, onResolved }) {
     onResolved();
   }
 
+  async function deleteBet() {
+    setLoading(true); setErr('');
+    const res = await fetch('/api/admin/delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ betId: bet.id }),
+    });
+    const d = await res.json();
+    setLoading(false);
+    if (!res.ok) return setErr(d.error);
+    window.location.href = '/';
+  }
+
   if (bet.status !== 'open') return (
     <div className="card" style={{ borderColor: 'var(--border2)' }}>
-      <div style={{ fontSize: '0.68rem', color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 500, marginBottom: 8 }}>Admin</div>
-      <div style={{ fontSize: '0.8rem', color: 'var(--text3)' }}>Market is closed.</div>
+      <div style={{ fontSize: '0.68rem', color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 500, marginBottom: 12 }}>Admin</div>
+      <div style={{ fontSize: '0.8rem', color: 'var(--text3)', marginBottom: 14 }}>Market is closed.</div>
+      {!confirmDelete ? (
+        <button className="btn btn-danger" style={{ width: '100%', justifyContent: 'center', fontSize: '0.8rem' }} onClick={() => setConfirmDelete(true)}>
+          Delete market
+        </button>
+      ) : (
+        <>
+          <div style={{ fontSize: '0.8rem', color: 'var(--text2)', marginBottom: 10 }}>Delete permanently? This cannot be undone.</div>
+          <div style={{ display: 'flex', gap: 7 }}>
+            <button className="btn btn-ghost" style={{ flex: 1, justifyContent: 'center', fontSize: '0.8rem' }} onClick={() => setConfirmDelete(false)}>Cancel</button>
+            <button className="btn btn-danger" style={{ flex: 2, justifyContent: 'center', fontSize: '0.8rem' }} onClick={deleteBet} disabled={loading}>
+              {loading ? '...' : 'Confirm delete'}
+            </button>
+          </div>
+        </>
+      )}
+      {err && <div className="error-msg" style={{ marginTop: 8 }}>{err}</div>}
     </div>
   );
 
@@ -176,7 +206,19 @@ export default function BetPage({ params }) {
                   Positions
                 </div>
                 <div className="positions-list">
-                  {positions.map((p, i) => (
+                  {positions.map((p, i) => {
+                    const total = (bet.total_yes || 0) + (bet.total_no || 0);
+                    let pnl = null;
+                    if (bet.status === 'resolved' && bet.outcome) {
+                      if (p.side === bet.outcome) {
+                        const winnerPool = bet.outcome === 'yes' ? (bet.total_yes || 0) : (bet.total_no || 0);
+                        const payout = winnerPool > 0 ? Math.round((p.amount / winnerPool) * total) : 0;
+                        pnl = payout - p.amount;
+                      } else {
+                        pnl = -p.amount;
+                      }
+                    }
+                    return (
                     <div key={i} className="position-row">
                       <Link href={`/user/${encodeURIComponent(p.user_name)}`} className="position-title" style={{ color: 'var(--text)' }}>
                         {p.user_name}
@@ -186,9 +228,14 @@ export default function BetPage({ params }) {
                           {p.side.toUpperCase()}
                         </span>
                         <span>{p.amount} sl</span>
+                        {bet.status === 'refunded'
+                          ? <span style={{ color: 'var(--text3)', fontSize: '0.75rem' }}>refunded</span>
+                          : pnl !== null && <span style={{ color: pnl >= 0 ? 'var(--yes)' : 'var(--no)', fontSize: '0.75rem', fontWeight: 600 }}>{pnl >= 0 ? '+' : ''}{pnl} sl</span>
+                        }
                       </span>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -199,28 +246,7 @@ export default function BetPage({ params }) {
             {isAdmin && <AdminSidebar bet={bet} onResolved={load} />}
 
             {/* Regular bet placement for non-admins or if admin hasn't bet */}
-            {!isAdmin && (myPosition ? (
-              <div className="card">
-                <div style={{ fontSize: '0.7rem', color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 10, fontWeight: 500 }}>
-                  Your position
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <span style={{ color: myPosition.side === 'yes' ? 'var(--yes)' : 'var(--no)', fontWeight: 600, fontSize: '1rem' }}>
-                    {myPosition.side.toUpperCase()}
-                  </span>
-                  <span style={{ fontSize: '0.88rem' }}>{myPosition.amount} sl</span>
-                </div>
-                {bet.status === 'resolved' && (
-                  <div style={{ marginTop: 10, fontSize: '0.8rem' }}>
-                    {myPosition.side === bet.outcome
-                      ? <span style={{ color: 'var(--yes)' }}>✓ You won</span>
-                      : <span style={{ color: 'var(--no)' }}>✗ You lost</span>}
-                  </div>
-                )}
-                {bet.status === 'refunded' && (
-                  <div style={{ marginTop: 10, fontSize: '0.8rem', color: 'var(--text2)' }}>Refunded</div>
-                )}
-              </div>
+            {!isAdmin && (myPosition ? (\n              <div className="card">\n                <div style={{ fontSize: '0.7rem', color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 10, fontWeight: 500 }}>\n                  Your position\n                </div>\n                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>\n                  <span style={{ color: myPosition.side === 'yes' ? 'var(--yes)' : 'var(--no)', fontWeight: 600, fontSize: '1rem' }}>\n                    {myPosition.side.toUpperCase()}\n                  </span>\n                  <span style={{ fontSize: '0.88rem' }}>{myPosition.amount} sl</span>\n                </div>\n                {bet.status === 'resolved' && (() => {\n                  const t = (bet.total_yes || 0) + (bet.total_no || 0);\n                  const winnerPool = bet.outcome === 'yes' ? (bet.total_yes || 0) : (bet.total_no || 0);\n                  const won = myPosition.side === bet.outcome;\n                  const payout = won && winnerPool > 0 ? Math.round((myPosition.amount / winnerPool) * t) : 0;\n                  const pnl = won ? payout - myPosition.amount : -myPosition.amount;\n                  return (\n                    <div style={{ marginTop: 10, fontSize: '0.85rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>\n                      <span style={{ color: won ? 'var(--yes)' : 'var(--no)' }}>{won ? '✓ You won' : '✗ You lost'}</span>\n                      <span style={{ color: pnl >= 0 ? 'var(--yes)' : 'var(--no)', fontWeight: 700 }}>{pnl >= 0 ? '+' : ''}{pnl} sl</span>\n                    </div>\n                  );\n                })()}\n                {bet.status === 'refunded' && (\n                  <div style={{ marginTop: 10, fontSize: '0.8rem', color: 'var(--text2)' }}>Refunded</div>\n                )}\n              </div>
             ) : bet.status === 'open' && session ? (
               <div className="card">
                 <div style={{ fontSize: '0.7rem', color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 14, fontWeight: 500 }}>

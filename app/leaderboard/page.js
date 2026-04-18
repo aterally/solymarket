@@ -14,6 +14,7 @@ export default function LeaderboardPage() {
   }, []);
 
   const medals = ['🥇', '🥈', '🥉'];
+  // Use numbers for all ranks
 
   return (
     <>
@@ -22,7 +23,7 @@ export default function LeaderboardPage() {
         <Link href="/" style={{ color: 'var(--text3)', fontSize: '0.78rem', display: 'inline-block', marginBottom: 24 }}>← back</Link>
         <div className="page-header">
           <h1>Leaderboard</h1>
-          <p>Top 10 by solies</p>
+          <p>Top 15 by solies</p>
         </div>
 
         {loading ? (
@@ -43,7 +44,7 @@ export default function LeaderboardPage() {
                   style={{ background: isMe ? 'var(--surface2)' : 'transparent', textDecoration: 'none' }}
                 >
                   <div className="lb-rank">
-                    {i < 3 ? medals[i] : <span style={{ fontFamily: 'var(--font-mono)' }}>{i + 1}</span>}
+                    <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 700 }}>{i + 1}.</span>
                   </div>
                   <div className="lb-name" style={{ fontWeight: isMe ? 600 : 500 }}>
                     {row.display_name}
