@@ -267,6 +267,11 @@ function Comment({ comment, allComments, session, betId, onReplyPosted, onDelete
         <span className="comment-time">{timeAgo(comment.created_at)}</span>
       </div>
       <div className="comment-body">{comment.content}</div>
+      {comment.image_url && (
+        <div style={{ paddingLeft: 38, marginTop: 6 }}>
+          <img src={comment.image_url} alt="" style={{ maxHeight: 240, maxWidth: '100%', borderRadius: 8, border: '1px solid var(--border)', cursor: 'pointer' }} onClick={() => window.open(comment.image_url, '_blank')} />
+        </div>
+      )}
       <div className="comment-actions">
         <button
           className={`comment-action-btn${liked ? ' liked' : ''}`}
@@ -332,6 +337,8 @@ function CommentsSection({ betId, session, isAdmin }) {
   const [newComment, setNewComment] = useState('');
   const [posting, setPosting] = useState(false);
   const [err, setErr] = useState('');
+  const [pendingImage, setPendingImage] = useState(null); // base64 dataUrl
+  const fileRef = useRef(null);
 
   useEffect(() => {
     fetch(`/api/comments?betId=${betId}`)
@@ -339,19 +346,30 @@ function CommentsSection({ betId, session, isAdmin }) {
       .then(d => { setComments(Array.isArray(d) ? d : []); setLoading(false); });
   }, [betId]);
 
+  function handleFileChange(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) return setErr('Only images allowed');
+    const reader = new FileReader();
+    reader.onload = ev => setPendingImage(ev.target.result);
+    reader.readAsDataURL(file);
+  }
+
   async function postComment() {
-    if (!newComment.trim()) return;
+    if (!newComment.trim() && !pendingImage) return;
     setPosting(true); setErr('');
     const res = await fetch('/api/comments', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ betId, content: newComment }),
+      body: JSON.stringify({ betId, content: newComment, imageUrl: pendingImage || undefined }),
     });
     const d = await res.json();
     setPosting(false);
     if (!res.ok) return setErr(d.error);
     setComments(prev => [...prev, d]);
     setNewComment('');
+    setPendingImage(null);
+    if (fileRef.current) fileRef.current.value = '';
   }
 
   function handleDeleted(id) {
@@ -375,13 +393,21 @@ function CommentsSection({ betId, session, isAdmin }) {
               onChange={e => setNewComment(e.target.value)}
               style={{ marginBottom: 8, fontSize: '0.9rem' }}
             />
+            {pendingImage && (
+              <div style={{ position: 'relative', marginBottom: 8, display: 'inline-block' }}>
+                <img src={pendingImage} alt="preview" style={{ maxHeight: 160, maxWidth: '100%', borderRadius: 8, border: '1px solid var(--border)' }} />
+                <button onClick={() => { setPendingImage(null); if (fileRef.current) fileRef.current.value = ''; }}
+                  style={{ position: 'absolute', top: 4, right: 4, background: 'rgba(0,0,0,0.7)', border: 'none', borderRadius: '50%', width: 22, height: 22, color: '#fff', cursor: 'pointer', fontSize: '0.8rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
+              </div>
+            )}
             {err && <div className="error-msg" style={{ marginBottom: 6 }}>{err}</div>}
-            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-              <button
-                className="btn btn-primary btn-sm"
-                onClick={postComment}
-                disabled={posting || !newComment.trim()}
-              >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <label style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, color: 'var(--text3)', fontSize: '0.82rem' }}>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                Photo
+                <input ref={fileRef} type="file" accept="image/*" onChange={handleFileChange} style={{ display: 'none' }} />
+              </label>
+              <button className="btn btn-primary btn-sm" onClick={postComment} disabled={posting || (!newComment.trim() && !pendingImage)}>
                 {posting ? '...' : 'Comment'}
               </button>
             </div>
@@ -615,15 +641,32 @@ export default function BetPage({ params }) {
         const me = await meRes.json();
         if (me.user) setUserCredits(me.user.credits);
         if (me.positions) {
-          const pos = me.positions.find(p => p.bet_id === parseInt(params.id));
-          if (pos) setMyPosition(pos);
+          // Find all positions for this bet, aggregate by side
+          const betPositions = me.positions.filter(p => p.bet_id === parseInt(params.id));
+          if (betPositions.length > 0) {
+            // Merge into a summary per side
+            const yesTotal = betPositions.filter(p => p.side === 'yes').reduce((s, p) => s + parseInt(p.amount), 0);
+            const noTotal = betPositions.filter(p => p.side === 'no').reduce((s, p) => s + parseInt(p.amount), 0);
+            // Show the dominant side
+            if (yesTotal > 0 || noTotal > 0) {
+              const dominantSide = yesTotal >= noTotal ? 'yes' : 'no';
+              setMyPosition({ side: dominantSide, amount: yesTotal + noTotal, yes_amount: yesTotal, no_amount: noTotal });
+            }
+          }
         }
       }
     }
     setLoading(false);
   }
 
-  useEffect(() => { if (session !== undefined) load(); }, [session, params.id]);
+  useEffect(() => {
+    if (session !== undefined) {
+      load();
+      // Poll every 10s for live updates
+      const iv = setInterval(load, 10000);
+      return () => clearInterval(iv);
+    }
+  }, [session, params.id]);
 
   async function placeBet() {
     const credits = parseInt(amount);
@@ -648,7 +691,8 @@ export default function BetPage({ params }) {
 
   const { bet, positions } = data;
   const total = (bet.total_yes || 0) + (bet.total_no || 0);
-  const yesPct = total > 0 ? Math.round((bet.total_yes / total) * 100) : 50;
+  const hasVotes = total > 0;
+  const yesPct = hasVotes ? Math.round((bet.total_yes / total) * 100) : 50;
   const noPct = 100 - yesPct;
   const isAdmin = session?.user?.isAdmin;
   const isManager = session?.user?.isManager;
@@ -754,76 +798,122 @@ export default function BetPage({ params }) {
             {isAdmin && <AdminSidebar bet={bet} onResolved={load} betId={params.id} />}
             {isManager && !isAdmin && <ManagerSidebar bet={bet} betId={params.id} />}
 
-            {!isAdmin && (myPosition ? (
+            {!isAdmin && (myPosition && (
               <div className="card">
                 <div style={{ fontSize: '0.7rem', color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 12, fontWeight: 600 }}>
                   Your position
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                  <span style={{ color: myPosition.side === 'yes' ? 'var(--yes)' : 'var(--no)', fontWeight: 700, fontSize: '1.1rem' }}>
-                    {myPosition.side.toUpperCase()}
-                  </span>
-                  <span style={{ fontSize: '1rem', fontFamily: 'var(--font-mono)' }}>{myPosition.amount} sl</span>
+                <div style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
+                  {myPosition.yes_amount > 0 && (
+                    <div style={{ flex: 1, padding: '8px 10px', background: 'var(--yes-dim)', border: '1px solid #1a4d2a', borderRadius: 6 }}>
+                      <div style={{ color: 'var(--yes)', fontWeight: 700 }}>YES</div>
+                      <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.88rem' }}>{myPosition.yes_amount} sl</div>
+                    </div>
+                  )}
+                  {myPosition.no_amount > 0 && (
+                    <div style={{ flex: 1, padding: '8px 10px', background: 'var(--no-dim)', border: '1px solid #5c1a1a', borderRadius: 6 }}>
+                      <div style={{ color: 'var(--no)', fontWeight: 700 }}>NO</div>
+                      <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.88rem' }}>{myPosition.no_amount} sl</div>
+                    </div>
+                  )}
                 </div>
                 {bet.status === 'resolved' && (() => {
                   const t = (bet.total_yes || 0) + (bet.total_no || 0);
                   const winnerPool = bet.outcome === 'yes' ? (bet.total_yes || 0) : (bet.total_no || 0);
-                  const won = myPosition.side === bet.outcome;
-                  const payout = won && winnerPool > 0 ? Math.round((myPosition.amount / winnerPool) * t) : 0;
-                  const pnl = won ? payout - myPosition.amount : -myPosition.amount;
+                  const myWinAmount = bet.outcome === 'yes' ? myPosition.yes_amount : myPosition.no_amount;
+                  const payout = myWinAmount > 0 && winnerPool > 0 ? Math.round((myWinAmount / winnerPool) * t) : 0;
+                  const pnl = payout - myPosition.amount;
+                  const won = payout > 0;
                   return (
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 4, padding: '8px 10px', background: won ? 'var(--yes-dim)' : 'var(--no-dim)', borderRadius: 6 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 10px', background: won ? 'var(--yes-dim)' : 'var(--no-dim)', borderRadius: 6 }}>
                       <span style={{ color: won ? 'var(--yes)' : 'var(--no)', fontWeight: 600 }}>{won ? 'Won' : 'Lost'}</span>
                       <span style={{ color: won ? 'var(--yes)' : 'var(--no)', fontWeight: 700, fontFamily: 'var(--font-mono)' }}>{pnl >= 0 ? '+' : ''}{pnl} sl</span>
                     </div>
                   );
                 })()}
-                {bet.status === 'refunded' && (
-                  <div style={{ marginTop: 6, fontSize: '0.85rem', color: 'var(--text2)' }}>Refunded</div>
-                )}
+                {bet.status === 'refunded' && <div style={{ fontSize: '0.85rem', color: 'var(--text2)', marginTop: 4 }}>Refunded</div>}
               </div>
-            ) : bet.status === 'open' && session ? (
-              <div className="card">
-                <div style={{ fontSize: '0.7rem', color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 14, fontWeight: 600 }}>
-                  Place bet
+            ))}
+
+            {/* Always show the bet widget when market is open */}
+            {!isAdmin && bet.status === 'open' && session ? (
+              <div className="card" style={{ padding: '20px' }}>
+                {/* Buy / Sell tabs */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+                  <div style={{ display: 'flex', gap: 0, borderBottom: '1px solid var(--border)', width: '100%' }}>
+                    <button style={{ padding: '6px 18px', fontWeight: 700, fontSize: '0.9rem', background: 'none', color: 'var(--yes)', borderBottom: '2px solid var(--yes)', marginBottom: -1 }}>Buy</button>
+                    <button style={{ padding: '6px 18px', fontWeight: 500, fontSize: '0.9rem', background: 'none', color: 'var(--text3)', borderBottom: '2px solid transparent', marginBottom: -1 }}>Sell</button>
+                    <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 4, paddingBottom: 4 }}>
+                      <span style={{ fontSize: '0.78rem', color: 'var(--text3)' }}>Market</span>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 12 15 18 9"/></svg>
+                    </div>
+                  </div>
                 </div>
-                <div className="side-btns">
-                  <button className={`btn btn-yes${side === 'yes' ? ' active' : ''}`} onClick={() => setSide('yes')}>YES</button>
-                  <button className={`btn btn-no${side === 'no' ? ' active' : ''}`} onClick={() => setSide('no')}>NO</button>
+
+                {/* YES / NO pick */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 16 }}>
+                  <button onClick={() => setSide('yes')}
+                    style={{ padding: '12px', borderRadius: 8, fontWeight: 700, fontSize: '0.95rem', cursor: 'pointer', transition: 'all 0.12s',
+                      background: side === 'yes' ? 'var(--yes)' : 'var(--yes-dim)',
+                      color: side === 'yes' ? '#000' : 'var(--yes)',
+                      border: `1px solid ${side === 'yes' ? 'var(--yes)' : '#1a4d2a'}` }}>
+                    Yes {hasVotes ? `${yesPct}¢` : '—'}
+                  </button>
+                  <button onClick={() => setSide('no')}
+                    style={{ padding: '12px', borderRadius: 8, fontWeight: 700, fontSize: '0.95rem', cursor: 'pointer', transition: 'all 0.12s',
+                      background: side === 'no' ? 'var(--no)' : 'var(--no-dim)',
+                      color: side === 'no' ? '#fff' : 'var(--no)',
+                      border: `1px solid ${side === 'no' ? 'var(--no)' : '#5c1a1a'}` }}>
+                    No {hasVotes ? `${noPct}¢` : '—'}
+                  </button>
                 </div>
-                <div className="form-group">
-                  <label>Amount</label>
+
+                {/* Amount */}
+                <div style={{ marginBottom: 12 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                    <span style={{ fontSize: '0.8rem', color: 'var(--text3)' }}>Amount</span>
+                    {userCredits !== null && <span style={{ fontSize: '0.75rem', color: 'var(--text3)' }}>Bal: <strong style={{ color: 'var(--text2)' }}>{userCredits} sl</strong></span>}
+                  </div>
                   <input
                     type="number" min="1" max={userCredits || 100}
-                    placeholder="10" value={amount}
+                    placeholder="0" value={amount}
                     onChange={e => setAmount(e.target.value)}
                     onKeyDown={e => e.key === 'Enter' && placeBet()}
+                    style={{ textAlign: 'right', fontSize: '1.1rem', fontWeight: 600, fontFamily: 'var(--font-mono)' }}
                   />
-                  {userCredits !== null && (
-                    <div style={{ marginTop: 5, fontSize: '0.75rem', color: 'var(--text3)', display: 'flex', justifyContent: 'space-between' }}>
-                      <span>Balance: {userCredits} sl</span>
-                      <button onClick={() => setAmount(String(userCredits))} style={{ color: 'var(--accent)', background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 500 }}>
-                        max
-                      </button>
-                    </div>
-                  )}
                 </div>
-                {err && <div className="error-msg">{err}</div>}
-                {success && <div className="success-msg">{success}</div>}
+
+                {/* Preset amounts */}
+                <div style={{ display: 'flex', gap: 6, marginBottom: 16 }}>
+                  {[1, 5, 10, 100].map(v => (
+                    <button key={v} onClick={() => setAmount(a => String((parseInt(a) || 0) + v))}
+                      style={{ flex: 1, padding: '5px 0', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text2)', fontSize: '0.78rem', cursor: 'pointer', fontWeight: 500 }}>
+                      +{v}
+                    </button>
+                  ))}
+                  <button onClick={() => setAmount(String(userCredits || ''))}
+                    style={{ flex: 1, padding: '5px 0', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text2)', fontSize: '0.78rem', cursor: 'pointer', fontWeight: 500 }}>
+                    Max
+                  </button>
+                </div>
+
+                {err && <div className="error-msg" style={{ marginBottom: 10 }}>{err}</div>}
+                {success && <div className="success-msg" style={{ marginBottom: 10 }}>{success}</div>}
+
                 <button
-                  className={`btn ${side === 'yes' ? 'btn-yes' : 'btn-no'}`}
-                  style={{ width: '100%', justifyContent: 'center', marginTop: 2 }}
-                  onClick={placeBet}
-                  disabled={placing}
-                >
-                  {placing ? '...' : `Bet ${side.toUpperCase()}`}
+                  onClick={placeBet} disabled={placing}
+                  style={{ width: '100%', padding: '12px', borderRadius: 8, fontWeight: 700, fontSize: '0.95rem', cursor: placing ? 'not-allowed' : 'pointer', background: 'var(--accent)', border: 'none', color: '#fff', opacity: placing ? 0.6 : 1 }}>
+                  {placing ? '...' : 'Trade'}
                 </button>
+                <div style={{ marginTop: 10, fontSize: '0.72rem', color: 'var(--text3)', textAlign: 'center' }}>
+                  By trading, you agree to the <span style={{ color: 'var(--accent)', cursor: 'pointer' }}>Terms of Use</span>.
+                </div>
               </div>
             ) : bet.status !== 'open' ? (
               <div className="card">
                 <div style={{ fontSize: '0.9rem', color: 'var(--text2)' }}>This market is closed.</div>
               </div>
-            ) : null)}
+            ) : null}
 
             {/* Proposal widget for non-admins */}
             <ProposalWidget betId={params.id} betStatus={bet.status} session={session} />

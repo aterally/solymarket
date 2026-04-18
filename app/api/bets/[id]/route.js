@@ -11,10 +11,13 @@ export async function GET(req, { params }) {
     `;
     if (!betRows[0]) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
+    // Aggregate positions per user per side (sum amounts)
     const { rows: positions } = await sql`
-      SELECT bp.side, bp.amount, COALESCE(u.username, u.name) as user_name
+      SELECT bp.side, SUM(bp.amount) as amount, COALESCE(u.username, u.name) as user_name, u.id as user_id
       FROM bet_positions bp JOIN users u ON bp.user_id = u.id
       WHERE bp.bet_id = ${id}
+      GROUP BY bp.side, u.id, COALESCE(u.username, u.name)
+      ORDER BY SUM(bp.amount) DESC
     `;
 
     return NextResponse.json({ bet: betRows[0], positions });

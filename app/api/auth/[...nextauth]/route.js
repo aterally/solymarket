@@ -33,7 +33,7 @@ const handler = NextAuth({
       if (session?.user?.email) {
         try {
           const { rows } = await sql`
-            SELECT id, username, is_admin, is_manager, is_banned, is_frozen
+            SELECT id, username, is_admin, is_manager, is_banned, custom_image
             FROM users WHERE email = ${session.user.email}
           `;
           if (rows[0]) {
@@ -42,6 +42,8 @@ const handler = NextAuth({
             session.user.isAdmin = rows[0].is_admin;
             session.user.isManager = rows[0].is_manager;
             session.user.hasUsername = !!rows[0].username;
+            // Override image with custom avatar if set
+            if (rows[0].custom_image) session.user.image = rows[0].custom_image;
           }
         } catch (err) {
           console.error('Session error:', err);

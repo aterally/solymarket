@@ -1,6 +1,6 @@
 'use client';
 import { useSession, signOut } from 'next-auth/react';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { Navbar } from '../Navbar';
 import Link from 'next/link';
 
@@ -13,6 +13,9 @@ export default function ProfilePage() {
   const [usernameErr, setUsernameErr] = useState('');
   const [usernameSaving, setUsernameSaving] = useState(false);
   const [usernameOk, setUsernameOk] = useState('');
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [avatarErr, setAvatarErr] = useState('');
+  const fileRef = useRef(null);
 
   useEffect(() => {
     if (!session) return;
@@ -37,6 +40,30 @@ export default function ProfilePage() {
     fetch('/api/user/me').then(r => r.json()).then(d => setUserData(d));
   }
 
+  async function handleAvatarChange(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) return setAvatarErr('Only images allowed');
+    if (file.size > 600000) return setAvatarErr('Image too large (max ~500KB)');
+    setUploadingAvatar(true); setAvatarErr('');
+    const reader = new FileReader();
+    reader.onload = async (ev) => {
+      const dataUrl = ev.target.result;
+      const res = await fetch('/api/upload', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dataUrl, type: 'avatar' }),
+      });
+      const d = await res.json();
+      setUploadingAvatar(false);
+      if (!res.ok) return setAvatarErr(d.error);
+      // Refresh user data to show new avatar
+      fetch('/api/user/me').then(r => r.json()).then(d => setUserData(d));
+      await update();
+    };
+    reader.readAsDataURL(file);
+  }
+
   if (!session) return <><Navbar /><div className="loading">not signed in</div></>;
   if (loading) return <><Navbar /><div className="loading">loading</div></>;
 
@@ -45,6 +72,7 @@ export default function ProfilePage() {
   const lost = positions?.filter(p => p.status === 'resolved' && p.side !== p.outcome).length || 0;
   const open = positions?.filter(p => p.status === 'open').length || 0;
   const displayName = user.username || user.name;
+  const avatarSrc = user.custom_image || user.image;
 
   return (
     <>
@@ -57,18 +85,30 @@ export default function ProfilePage() {
 
         <div className="profile-header">
           <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-            {user.image
-              ? <img src={user.image} alt="" className="profile-avatar" />
-              : <div className="profile-avatar" style={{ background: 'var(--surface3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.8rem', color: 'var(--text3)' }}>
-                  {displayName?.[0]?.toUpperCase()}
-                </div>
-            }
+            {/* Avatar with upload button */}
+            <div style={{ position: 'relative', flexShrink: 0 }}>
+              {avatarSrc
+                ? <img src={avatarSrc} alt="" className="profile-avatar" />
+                : <div className="profile-avatar" style={{ background: 'var(--surface3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.8rem', color: 'var(--text3)' }}>
+                    {displayName?.[0]?.toUpperCase()}
+                  </div>
+              }
+              <label style={{ position: 'absolute', bottom: 0, right: 0, background: 'var(--surface2)', border: '2px solid var(--bg)', borderRadius: '50%', width: 26, height: 26, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'var(--text2)' }} title="Change avatar">
+                {uploadingAvatar
+                  ? <span style={{ fontSize: '0.6rem' }}>...</span>
+                  : <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                }
+                <input ref={fileRef} type="file" accept="image/*" onChange={handleAvatarChange} style={{ display: 'none' }} />
+              </label>
+            </div>
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
                 <h1 className="profile-name">{displayName}</h1>
                 {user.is_admin && <span className="tag-admin">admin</span>}
+                {user.is_manager && <span style={{ fontSize: '0.7rem', padding: '2px 8px', background: '#2d1f00', color: '#d29922', border: '1px solid #5a3e00', borderRadius: 20, fontWeight: 600 }}>manager</span>}
               </div>
               <div style={{ fontSize: '0.85rem', color: 'var(--text3)' }}>{user.email}</div>
+              {avatarErr && <div style={{ color: 'var(--no)', fontSize: '0.75rem', marginTop: 4 }}>{avatarErr}</div>}
             </div>
           </div>
         </div>
@@ -145,9 +185,15 @@ export default function ProfilePage() {
           </div>
         )}
 
-        <button className="btn btn-ghost" onClick={() => signOut({ callbackUrl: '/' })} style={{ color: 'var(--no)' }}>
-          Sign out
-        </button>
+        <div style={{ display: 'flex', gap: 10 }}>
+          <Link href="/messages" className="btn btn-ghost" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            Messages & Credits
+          </Link>
+          <button className="btn btn-ghost" onClick={() => signOut({ callbackUrl: '/' })} style={{ color: 'var(--no)' }}>
+            Sign out
+          </button>
+        </div>
       </div>
     </>
   );

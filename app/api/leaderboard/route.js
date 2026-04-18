@@ -4,7 +4,8 @@ import { NextResponse } from 'next/server';
 export async function GET() {
   try {
     const { rows } = await sql`
-      SELECT COALESCE(username, name) as display_name, credits, is_banned
+      SELECT COALESCE(username, name) as display_name, credits,
+             COALESCE(custom_image, image) as avatar
       FROM users
       WHERE is_banned = FALSE
       ORDER BY credits DESC

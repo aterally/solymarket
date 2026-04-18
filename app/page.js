@@ -36,7 +36,8 @@ function CircularProgress({ pct, size = 48 }) {
 
 function BetCard({ bet }) {
   const total = (bet.total_yes || 0) + (bet.total_no || 0);
-  const yesPct = total > 0 ? Math.round((bet.total_yes / total) * 100) : 50;
+  const hasVotes = total > 0;
+  const yesPct = hasVotes ? Math.round((bet.total_yes / total) * 100) : null;
   const isClosed = bet.status !== 'open';
 
   const inner = (
@@ -51,7 +52,10 @@ function BetCard({ bet }) {
           </div>
           <div className="bet-title" style={{ color: isClosed ? 'var(--text2)' : 'var(--text)', marginBottom: 0 }}>{bet.title}</div>
         </div>
-        <CircularProgress pct={yesPct} size={52} />
+        {hasVotes
+          ? <CircularProgress pct={yesPct} size={52} />
+          : <div style={{ width: 52, height: 52, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--surface2)', borderRadius: '50%', border: '3px solid var(--border)', fontSize: '1rem', fontWeight: 700, color: 'var(--text3)' }}>?</div>
+        }
       </div>
 
       <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
@@ -60,14 +64,14 @@ function BetCard({ bet }) {
           background: 'var(--yes-dim)', border: '1px solid #1a4d2a',
           textAlign: 'center', fontSize: '0.82rem', fontWeight: 700, color: 'var(--yes)'
         }}>
-          Yes {yesPct}%
+          Yes {hasVotes ? `${yesPct}%` : '—'}
         </div>
         <div style={{
           flex: 1, padding: '6px 0', borderRadius: 'var(--radius)',
           background: 'var(--no-dim)', border: '1px solid #5c1a1a',
           textAlign: 'center', fontSize: '0.82rem', fontWeight: 700, color: 'var(--no)'
         }}>
-          No {100 - yesPct}%
+          No {hasVotes ? `${100 - yesPct}%` : '—'}
         </div>
       </div>
 
@@ -158,9 +162,10 @@ export default function Home() {
   useEffect(() => {
     if (!session) return;
     if (!session.user?.hasUsername) setShowUsername(true);
-    fetch('/api/bets')
-      .then(r => r.json())
-      .then(data => { setBets(Array.isArray(data) ? data : []); setLoading(false); });
+    const doFetch = () => fetch('/api/bets').then(r => r.json()).then(data => { setBets(Array.isArray(data) ? data : []); setLoading(false); });
+    doFetch();
+    const iv = setInterval(doFetch, 15000);
+    return () => clearInterval(iv);
   }, [session]);
 
   if (status === 'loading') return <div className="loading">loading</div>;

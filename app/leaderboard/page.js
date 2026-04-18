@@ -8,10 +8,14 @@ export default function LeaderboardPage() {
   const { data: session } = useSession();
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [myInfo, setMyInfo] = useState(null);
 
   useEffect(() => {
     fetch('/api/leaderboard').then(r => r.json()).then(d => { setRows(Array.isArray(d) ? d : []); setLoading(false); });
-  }, []);
+    if (session) fetch('/api/user/me').then(r => r.json()).then(d => { if (d.user) setMyInfo(d.user); });
+  }, [session]);
+
+  const myName = myInfo ? (myInfo.username || myInfo.name) : null;
 
   return (
     <>
@@ -33,9 +37,8 @@ export default function LeaderboardPage() {
         ) : (
           <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
             {rows.map((row, i) => {
-              const isMe = session?.user?.username
-                ? session.user.username === row.display_name
-                : session?.user?.name === row.display_name;
+              const isMe = myName && myName === row.display_name;
+              const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : null;
               return (
                 <Link
                   key={i}
@@ -43,7 +46,14 @@ export default function LeaderboardPage() {
                   className="lb-row"
                   style={{ background: isMe ? 'var(--surface2)' : 'transparent' }}
                 >
-                  <div className="lb-rank">{i + 1}.</div>
+                  <div className="lb-rank">{medal || `${i + 1}.`}</div>
+                  {/* Avatar */}
+                  {row.avatar
+                    ? <img src={row.avatar} alt="" style={{ width: 28, height: 28, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
+                    : <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'var(--surface3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.72rem', fontWeight: 700, color: 'var(--text3)', flexShrink: 0 }}>
+                        {row.display_name?.[0]?.toUpperCase()}
+                      </div>
+                  }
                   <div className="lb-name" style={{ fontWeight: isMe ? 700 : 500 }}>
                     {row.display_name}
                     {isMe && <span style={{ color: 'var(--text3)', fontWeight: 400, fontSize: '0.75rem', marginLeft: 8 }}>you</span>}

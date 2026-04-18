@@ -4,48 +4,30 @@ import { NextResponse } from 'next/server';
 
 export async function POST(req, { params }) {
   const session = await getServerSession();
-  if (!session?.user?.email) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  if (!session?.user?.email) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const { side, amount } = await req.json();
   const betId = parseInt(params.id);
   const credits = parseInt(amount);
 
-  if (!['yes', 'no'].includes(side)) {
-    return NextResponse.json({ error: 'Side must be yes or no' }, { status: 400 });
-  }
-  if (!credits || credits < 1) {
-    return NextResponse.json({ error: 'Invalid amount' }, { status: 400 });
-  }
+  if (!['yes', 'no'].includes(side)) return NextResponse.json({ error: 'Side must be yes or no' }, { status: 400 });
+  if (!credits || credits < 1) return NextResponse.json({ error: 'Invalid amount' }, { status: 400 });
 
   const { rows: userRows } = await sql`SELECT * FROM users WHERE email = ${session.user.email}`;
   const user = userRows[0];
   if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 });
   if (user.is_banned) return NextResponse.json({ error: 'Account banned' }, { status: 403 });
   if (user.is_frozen) return NextResponse.json({ error: 'Your betting is frozen' }, { status: 403 });
-
-  if (user.credits < credits) {
-    return NextResponse.json({ error: 'Insufficient credits' }, { status: 400 });
-  }
+  if (user.credits < credits) return NextResponse.json({ error: 'Insufficient credits' }, { status: 400 });
 
   const { rows: betRows } = await sql`SELECT * FROM bets WHERE id = ${betId}`;
   const bet = betRows[0];
   if (!bet) return NextResponse.json({ error: 'Bet not found' }, { status: 404 });
   if (bet.status !== 'open') return NextResponse.json({ error: 'Bet is not open' }, { status: 400 });
 
-  const { rows: existing } = await sql`
-    SELECT * FROM bet_positions WHERE bet_id = ${betId} AND user_id = ${user.id}
-  `;
-  if (existing.length > 0) {
-    return NextResponse.json({ error: 'You already have a position in this bet' }, { status: 400 });
-  }
-
+  // Allow multiple bets — just insert a new position row
   await sql`UPDATE users SET credits = credits - ${credits} WHERE id = ${user.id}`;
-  await sql`
-    INSERT INTO bet_positions (bet_id, user_id, side, amount)
-    VALUES (${betId}, ${user.id}, ${side}, ${credits})
-  `;
+  await sql`INSERT INTO bet_positions (bet_id, user_id, side, amount) VALUES (${betId}, ${user.id}, ${side}, ${credits})`;
 
   if (side === 'yes') {
     await sql`UPDATE bets SET total_yes = total_yes + ${credits} WHERE id = ${betId}`;
