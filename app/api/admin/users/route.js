@@ -8,13 +8,29 @@ async function requireAdmin(session) {
   return rows[0]?.is_admin === true;
 }
 
-// GET all users
+// GET all users (admin) or single user trades (?userId=xxx)
 export async function GET(req) {
   const session = await getServerSession();
   if (!await requireAdmin(session)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
+  const userId = req.nextUrl.searchParams.get('userId');
+
+  if (userId) {
+    // Return trade history for a specific user
+    const { rows } = await sql`
+      SELECT bp.id, bp.side, bp.amount, bp.created_at,
+             b.id as bet_id, b.title, b.status, b.outcome
+      FROM bet_positions bp
+      JOIN bets b ON bp.bet_id = b.id
+      WHERE bp.user_id = ${userId}
+      ORDER BY bp.created_at DESC
+    `;
+    return NextResponse.json(rows);
+  }
+
   const { rows } = await sql`
-    SELECT id, email, COALESCE(username, name) as display_name, name, username, credits, is_admin, is_banned, created_at
+    SELECT id, email, COALESCE(username, name) as display_name, name, username,
+           credits, is_admin, is_banned, last_ip, created_at
     FROM users ORDER BY credits DESC
   `;
   return NextResponse.json(rows);

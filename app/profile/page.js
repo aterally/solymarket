@@ -94,7 +94,7 @@ export default function ProfilePage() {
         {/* Stats */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, marginBottom: 24 }}>
           {[
-            { label: 'Credits', val: user.credits },
+            { label: 'Solies', val: user.credits },
             { label: 'Active', val: open },
             { label: 'Won', val: won, color: 'var(--yes)' },
             { label: 'Lost', val: lost, color: 'var(--no)' },
@@ -121,7 +121,7 @@ export default function ProfilePage() {
                 <span className="position-title">{p.title}</span>
                 <span className="position-meta">
                   <span style={{ color: p.side === 'yes' ? 'var(--yes)' : 'var(--no)', fontWeight: 600 }}>{p.side.toUpperCase()}</span>
-                  <span>{p.amount} cr</span>
+                  <span>{p.amount} sl</span>
                   <span className={`status-badge status-${p.status}`}>{p.status}</span>
                   {p.status === 'resolved' && (
                     <span style={{ color: p.side === p.outcome ? 'var(--yes)' : 'var(--no)' }}>

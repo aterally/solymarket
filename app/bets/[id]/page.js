@@ -4,6 +4,69 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Navbar } from '../../Navbar';
 
+function AdminSidebar({ bet, onResolved }) {
+  const [outcome, setOutcome] = useState('yes');
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState('');
+  const [msg, setMsg] = useState('');
+
+  async function resolve() {
+    setLoading(true); setErr('');
+    const res = await fetch('/api/admin/resolve', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ betId: bet.id, outcome }),
+    });
+    const d = await res.json();
+    setLoading(false);
+    if (!res.ok) return setErr(d.error);
+    setMsg(`Resolved ${outcome.toUpperCase()}. ${d.winnersCount} winner(s).`);
+    onResolved();
+  }
+
+  async function refund() {
+    setLoading(true); setErr('');
+    const res = await fetch('/api/admin/refund', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ betId: bet.id }),
+    });
+    const d = await res.json();
+    setLoading(false);
+    if (!res.ok) return setErr(d.error);
+    setMsg(`Refunded ${d.refunded} participant(s).`);
+    onResolved();
+  }
+
+  if (bet.status !== 'open') return (
+    <div className="card" style={{ borderColor: 'var(--border2)' }}>
+      <div style={{ fontSize: '0.68rem', color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 500, marginBottom: 8 }}>Admin</div>
+      <div style={{ fontSize: '0.8rem', color: 'var(--text3)' }}>Market is closed.</div>
+    </div>
+  );
+
+  return (
+    <div className="card" style={{ borderColor: 'var(--border2)' }}>
+      <div style={{ fontSize: '0.68rem', color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 500, marginBottom: 12 }}>Admin controls</div>
+      <div style={{ fontSize: '0.72rem', color: 'var(--text2)', marginBottom: 8 }}>Resolve outcome</div>
+      <div className="side-btns" style={{ marginBottom: 12 }}>
+        <button className={`btn btn-yes${outcome === 'yes' ? ' active' : ''}`} onClick={() => setOutcome('yes')}>YES</button>
+        <button className={`btn btn-no${outcome === 'no' ? ' active' : ''}`} onClick={() => setOutcome('no')}>NO</button>
+      </div>
+      <button className={`btn ${outcome === 'yes' ? 'btn-yes' : 'btn-no'}`} style={{ width: '100%', justifyContent: 'center', marginBottom: 8 }} onClick={resolve} disabled={loading}>
+        {loading ? '...' : `Resolve ${outcome.toUpperCase()}`}
+      </button>
+      <div style={{ borderTop: '1px solid var(--border)', paddingTop: 10, marginTop: 4 }}>
+        <button className="btn btn-ghost" style={{ width: '100%', justifyContent: 'center', fontSize: '0.78rem' }} onClick={refund} disabled={loading}>
+          Refund all
+        </button>
+      </div>
+      {err && <div className="error-msg">{err}</div>}
+      {msg && <div className="success-msg">{msg}</div>}
+    </div>
+  );
+}
+
 export default function BetPage({ params }) {
   const { data: session } = useSession();
   const [data, setData] = useState(null);
@@ -48,7 +111,7 @@ export default function BetPage({ params }) {
     const d = await res.json();
     setPlacing(false);
     if (!res.ok) return setErr(d.error);
-    setSuccess(`Placed ${credits} cr on ${side.toUpperCase()}`);
+    setSuccess(`Placed ${credits} sl on ${side.toUpperCase()}`);
     setUserCredits(d.credits);
     setAmount('');
     load();
@@ -61,6 +124,7 @@ export default function BetPage({ params }) {
   const total = (bet.total_yes || 0) + (bet.total_no || 0);
   const yesPct = total > 0 ? Math.round((bet.total_yes / total) * 100) : 50;
   const noPct = 100 - yesPct;
+  const isAdmin = session?.user?.isAdmin;
 
   return (
     <>
@@ -96,9 +160,9 @@ export default function BetPage({ params }) {
                 <div className="bar-no" style={{ width: noPct + '%' }} />
               </div>
               <div className="bar-labels">
-                <span className="yes-label">YES {yesPct}% · {bet.total_yes || 0} cr</span>
-                <span className="total-pool">{total} cr total</span>
-                <span className="no-label">{bet.total_no || 0} cr · {noPct}% NO</span>
+                <span className="yes-label">YES {yesPct}% · {bet.total_yes || 0} sl</span>
+                <span className="total-pool">{total} sl total</span>
+                <span className="no-label">{bet.total_no || 0} sl · {noPct}% NO</span>
               </div>
             </div>
 
@@ -114,12 +178,14 @@ export default function BetPage({ params }) {
                 <div className="positions-list">
                   {positions.map((p, i) => (
                     <div key={i} className="position-row">
-                      <span className="position-title">{p.user_name}</span>
+                      <Link href={`/user/${encodeURIComponent(p.user_name)}`} className="position-title" style={{ color: 'var(--text)' }}>
+                        {p.user_name}
+                      </Link>
                       <span className="position-meta">
                         <span style={{ color: p.side === 'yes' ? 'var(--yes)' : 'var(--no)', fontWeight: 600 }}>
                           {p.side.toUpperCase()}
                         </span>
-                        <span>{p.amount} cr</span>
+                        <span>{p.amount} sl</span>
                       </span>
                     </div>
                   ))}
@@ -128,8 +194,12 @@ export default function BetPage({ params }) {
             )}
           </div>
 
-          <div className="sticky-sidebar">
-            {myPosition ? (
+          <div className="sticky-sidebar" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {/* Admin controls shown first for admins */}
+            {isAdmin && <AdminSidebar bet={bet} onResolved={load} />}
+
+            {/* Regular bet placement for non-admins or if admin hasn't bet */}
+            {!isAdmin && (myPosition ? (
               <div className="card">
                 <div style={{ fontSize: '0.7rem', color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 10, fontWeight: 500 }}>
                   Your position
@@ -138,7 +208,7 @@ export default function BetPage({ params }) {
                   <span style={{ color: myPosition.side === 'yes' ? 'var(--yes)' : 'var(--no)', fontWeight: 600, fontSize: '1rem' }}>
                     {myPosition.side.toUpperCase()}
                   </span>
-                  <span style={{ fontSize: '0.88rem' }}>{myPosition.amount} cr</span>
+                  <span style={{ fontSize: '0.88rem' }}>{myPosition.amount} sl</span>
                 </div>
                 {bet.status === 'resolved' && (
                   <div style={{ marginTop: 10, fontSize: '0.8rem' }}>
@@ -148,9 +218,7 @@ export default function BetPage({ params }) {
                   </div>
                 )}
                 {bet.status === 'refunded' && (
-                  <div style={{ marginTop: 10, fontSize: '0.8rem', color: 'var(--text2)' }}>
-                    Refunded
-                  </div>
+                  <div style={{ marginTop: 10, fontSize: '0.8rem', color: 'var(--text2)' }}>Refunded</div>
                 )}
               </div>
             ) : bet.status === 'open' && session ? (
@@ -172,7 +240,7 @@ export default function BetPage({ params }) {
                   />
                   {userCredits !== null && (
                     <div style={{ marginTop: 4, fontSize: '0.7rem', color: 'var(--text3)', display: 'flex', justifyContent: 'space-between' }}>
-                      <span>Balance: {userCredits} cr</span>
+                      <span>Balance: {userCredits} sl</span>
                       <button onClick={() => setAmount(String(userCredits))} style={{ color: 'var(--text)', background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.7rem', fontWeight: 500 }}>
                         max
                       </button>
@@ -190,11 +258,11 @@ export default function BetPage({ params }) {
                   {placing ? '...' : `Bet ${side.toUpperCase()}`}
                 </button>
               </div>
-            ) : (bet.status !== 'open') ? (
+            ) : bet.status !== 'open' ? (
               <div className="card">
                 <div style={{ fontSize: '0.82rem', color: 'var(--text2)' }}>This market is closed.</div>
               </div>
-            ) : null}
+            ) : null)}
           </div>
         </div>
       </div>

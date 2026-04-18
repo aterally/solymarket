@@ -18,13 +18,14 @@ export async function GET(req) {
         credits INTEGER DEFAULT 100,
         is_admin BOOLEAN DEFAULT FALSE,
         is_banned BOOLEAN DEFAULT FALSE,
+        last_ip TEXT,
         created_at TIMESTAMPTZ DEFAULT NOW()
       )
     `;
 
-    // Add columns if upgrading existing DB
     await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS username TEXT UNIQUE`;
     await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS is_banned BOOLEAN DEFAULT FALSE`;
+    await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS last_ip TEXT`;
 
     await sql`
       CREATE TABLE IF NOT EXISTS bets (

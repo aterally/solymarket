@@ -22,7 +22,7 @@ export default function LeaderboardPage() {
         <Link href="/" style={{ color: 'var(--text3)', fontSize: '0.78rem', display: 'inline-block', marginBottom: 24 }}>← back</Link>
         <div className="page-header">
           <h1>Leaderboard</h1>
-          <p>Top 10 by credits</p>
+          <p>Top 10 by solies</p>
         </div>
 
         {loading ? (
@@ -32,9 +32,16 @@ export default function LeaderboardPage() {
         ) : (
           <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
             {rows.map((row, i) => {
-              const isMe = session?.user?.username === row.display_name || session?.user?.name === row.display_name;
+              const isMe = session?.user?.username
+                ? session.user.username === row.display_name
+                : session?.user?.name === row.display_name;
               return (
-                <div key={i} className="lb-row" style={{ padding: '11px 18px', background: isMe ? 'var(--surface)' : 'transparent' }}>
+                <Link
+                  key={i}
+                  href={`/user/${encodeURIComponent(row.display_name)}`}
+                  className="lb-row"
+                  style={{ background: isMe ? 'var(--surface2)' : 'transparent', textDecoration: 'none' }}
+                >
                   <div className="lb-rank">
                     {i < 3 ? medals[i] : <span style={{ fontFamily: 'var(--font-mono)' }}>{i + 1}</span>}
                   </div>
@@ -42,8 +49,8 @@ export default function LeaderboardPage() {
                     {row.display_name}
                     {isMe && <span style={{ color: 'var(--text3)', fontWeight: 400, fontSize: '0.72rem', marginLeft: 6 }}>you</span>}
                   </div>
-                  <div className="lb-credits">{row.credits} cr</div>
-                </div>
+                  <div className="lb-credits">{row.credits} sl</div>
+                </Link>
               );
             })}
           </div>

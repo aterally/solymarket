@@ -30,7 +30,7 @@ function BetCard({ bet }) {
       </div>
       <div className="bar-labels">
         <span className="yes-label">YES {yesPct}%</span>
-        <span className="total-pool">{total} cr</span>
+        <span className="total-pool">{total} sl</span>
         <span className="no-label">{noPct}% NO</span>
       </div>
     </Link>
@@ -82,12 +82,22 @@ function CreateBetModal({ onClose, onCreated }) {
   );
 }
 
+// Sort: all open first, then closed/resolved/refunded
+function sortBets(bets) {
+  return [...bets].sort((a, b) => {
+    const aOpen = a.status === 'open' ? 0 : 1;
+    const bOpen = b.status === 'open' ? 0 : 1;
+    if (aOpen !== bOpen) return aOpen - bOpen;
+    return new Date(b.created_at) - new Date(a.created_at);
+  });
+}
+
 export default function Home() {
   const { data: session, status } = useSession();
   const [bets, setBets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
-  const [filter, setFilter] = useState('open');
+  const [filter, setFilter] = useState('all');
   const [showUsername, setShowUsername] = useState(false);
 
   useEffect(() => {
@@ -104,7 +114,7 @@ export default function Home() {
     return (
       <div className="sign-in-page">
         <div className="sign-in-logo">solymarket</div>
-        <div className="sign-in-tagline">Prediction markets. Start with 100 credits.</div>
+        <div className="sign-in-tagline">Prediction markets. Start with 100 solies.</div>
         <div className="sign-in-card">
           <button className="google-btn" onClick={() => signIn('google')}>
             <svg width="16" height="16" viewBox="0 0 18 18">
@@ -120,9 +130,10 @@ export default function Home() {
     );
   }
 
-  const filtered = filter === 'all' ? bets : bets.filter(b =>
-    filter === 'open' ? b.status === 'open' : b.status !== 'open'
-  );
+  const allSorted = sortBets(bets);
+  const filtered = filter === 'all' ? allSorted :
+    filter === 'open' ? allSorted.filter(b => b.status === 'open') :
+    allSorted.filter(b => b.status !== 'open');
 
   return (
     <>
@@ -137,7 +148,7 @@ export default function Home() {
         </div>
 
         <div className="tabs">
-          {[['open', 'Open'], ['closed', 'Closed'], ['all', 'All']].map(([val, label]) => (
+          {[['all', 'All'], ['open', 'Open'], ['closed', 'Closed']].map(([val, label]) => (
             <button key={val} className={`tab${filter === val ? ' active' : ''}`} onClick={() => setFilter(val)}>
               {label}
             </button>
