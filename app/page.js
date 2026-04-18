@@ -5,39 +5,82 @@ import { Navbar } from './Navbar';
 import { UsernameModal } from './UsernameModal';
 import Link from 'next/link';
 
+function CircularProgress({ pct, size = 48 }) {
+  const r = (size - 6) / 2;
+  const circ = 2 * Math.PI * r;
+  const dash = (pct / 100) * circ;
+  const isHigh = pct >= 60;
+  const isLow = pct <= 40;
+  const color = isHigh ? 'var(--yes)' : isLow ? 'var(--no)' : 'var(--text2)';
+
+  return (
+    <div style={{ position: 'relative', width: size, height: size, flexShrink: 0 }}>
+      <svg width={size} height={size} style={{ transform: 'rotate(-90deg)' }}>
+        <circle cx={size/2} cy={size/2} r={r} fill="none" stroke="var(--surface3)" strokeWidth="3" />
+        <circle
+          cx={size/2} cy={size/2} r={r}
+          fill="none" stroke={color} strokeWidth="3"
+          strokeDasharray={`${dash} ${circ - dash}`}
+          strokeLinecap="round"
+        />
+      </svg>
+      <div style={{
+        position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
+        fontSize: size < 50 ? '0.62rem' : '0.72rem', fontWeight: 700, color, lineHeight: 1
+      }}>
+        {pct}%
+      </div>
+    </div>
+  );
+}
+
 function BetCard({ bet }) {
   const total = (bet.total_yes || 0) + (bet.total_no || 0);
   const yesPct = total > 0 ? Math.round((bet.total_yes / total) * 100) : 50;
-  const noPct = 100 - yesPct;
   const isClosed = bet.status !== 'open';
 
   const inner = (
     <>
-      <div className="bet-meta">
-        {bet.status === 'resolved' && bet.outcome && (
-          <span className={`outcome-badge outcome-${bet.outcome}`}>{bet.outcome.toUpperCase()}</span>
-        )}
-        {bet.status === 'refunded' && <span className="status-badge status-refunded">REFUNDED</span>}
-        {bet.status === 'open' && <span className="status-badge status-open">OPEN</span>}
-        <span style={{ fontSize: '0.8rem', color: 'var(--text3)', marginLeft: 'auto' }}>{bet.participant_count || 0} bets</span>
+      <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div className="bet-meta">
+            {bet.status === 'resolved' && bet.outcome && (
+              <span className={`outcome-badge outcome-${bet.outcome}`}>{bet.outcome.toUpperCase()}</span>
+            )}
+            {bet.status === 'refunded' && <span className="status-badge status-refunded">REFUNDED</span>}
+          </div>
+          <div className="bet-title" style={{ color: isClosed ? 'var(--text2)' : 'var(--text)', marginBottom: 0 }}>{bet.title}</div>
+        </div>
+        <CircularProgress pct={yesPct} size={52} />
       </div>
-      <div className="bet-title" style={{ color: isClosed ? 'var(--text2)' : 'var(--text)' }}>{bet.title}</div>
-      {bet.description && <div className="bet-desc">{bet.description}</div>}
-      <div className="bar-container" style={{ marginBottom: 8 }}>
-        <div className="bar-yes" style={{ width: yesPct + '%' }} />
-        <div className="bar-no" style={{ width: noPct + '%' }} />
+
+      <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
+        <div style={{
+          flex: 1, padding: '6px 0', borderRadius: 'var(--radius)',
+          background: 'var(--yes-dim)', border: '1px solid #1a4d2a',
+          textAlign: 'center', fontSize: '0.82rem', fontWeight: 700, color: 'var(--yes)'
+        }}>
+          Yes {yesPct}%
+        </div>
+        <div style={{
+          flex: 1, padding: '6px 0', borderRadius: 'var(--radius)',
+          background: 'var(--no-dim)', border: '1px solid #5c1a1a',
+          textAlign: 'center', fontSize: '0.82rem', fontWeight: 700, color: 'var(--no)'
+        }}>
+          No {100 - yesPct}%
+        </div>
       </div>
-      <div className="bar-labels">
-        <span className="yes-label">YES {yesPct}%</span>
-        <span className="total-pool">{total} sl pool</span>
-        <span className="no-label">{noPct}% NO</span>
+
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 12 }}>
+        <span style={{ fontSize: '0.75rem', color: 'var(--text3)' }}>${total.toLocaleString()} Vol.</span>
+        <span style={{ fontSize: '0.75rem', color: 'var(--text3)' }}>{bet.participant_count || 0} bets</span>
       </div>
     </>
   );
 
   if (isClosed) {
     return (
-      <div className="card" style={{ opacity: 0.72, cursor: 'default', pointerEvents: 'none' }}>
+      <div className="card" style={{ opacity: 0.65, cursor: 'default', pointerEvents: 'none' }}>
         {inner}
       </div>
     );

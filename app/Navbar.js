@@ -71,6 +71,7 @@ export function Navbar() {
   if (!session) return null;
 
   const displayName = session.user.username || session.user.name?.split(' ')[0] || 'me';
+  const isAdmin = session.user.isAdmin;
 
   return (
     <>
@@ -93,6 +94,14 @@ export function Navbar() {
                 <rect x="8" y="2" width="8" height="20" rx="1"/><rect x="2" y="10" width="6" height="12" rx="1"/><rect x="16" y="6" width="6" height="16" rx="1"/>
               </svg>
             </Link>
+            {isAdmin && (
+              <Link href="/admin" className="btn btn-sm" style={{ background: 'var(--accent-dim)', color: 'var(--accent)', border: '1px solid #1c4282', display: 'flex', alignItems: 'center', gap: 5 }}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                </svg>
+                Admin
+              </Link>
+            )}
             <Link href="/profile" className="btn btn-ghost btn-sm" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               {session.user.image && <img src={session.user.image} alt="" className="user-avatar" />}
               {displayName}

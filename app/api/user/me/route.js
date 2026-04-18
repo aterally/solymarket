@@ -9,7 +9,8 @@ export async function GET() {
   }
 
   const { rows } = await sql`
-    SELECT id, email, name, username, image, credits, is_admin, is_banned
+    SELECT id, email, name, username, image, credits, is_admin, is_manager,
+           is_banned, is_muted_comments, is_muted_proposing, is_muted_markets, is_frozen
     FROM users WHERE email = ${session.user.email}
   `;
   if (!rows[0]) return NextResponse.json({ error: 'Not found' }, { status: 404 });

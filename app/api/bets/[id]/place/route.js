@@ -1,4 +1,3 @@
-// app/api/bets/[id]/place/route.js
 import { getServerSession } from 'next-auth';
 import { sql } from '@vercel/postgres';
 import { NextResponse } from 'next/server';
@@ -23,6 +22,8 @@ export async function POST(req, { params }) {
   const { rows: userRows } = await sql`SELECT * FROM users WHERE email = ${session.user.email}`;
   const user = userRows[0];
   if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 });
+  if (user.is_banned) return NextResponse.json({ error: 'Account banned' }, { status: 403 });
+  if (user.is_frozen) return NextResponse.json({ error: 'Your betting is frozen' }, { status: 403 });
 
   if (user.credits < credits) {
     return NextResponse.json({ error: 'Insufficient credits' }, { status: 400 });
@@ -33,7 +34,6 @@ export async function POST(req, { params }) {
   if (!bet) return NextResponse.json({ error: 'Bet not found' }, { status: 404 });
   if (bet.status !== 'open') return NextResponse.json({ error: 'Bet is not open' }, { status: 400 });
 
-  // Check existing position
   const { rows: existing } = await sql`
     SELECT * FROM bet_positions WHERE bet_id = ${betId} AND user_id = ${user.id}
   `;
@@ -41,14 +41,12 @@ export async function POST(req, { params }) {
     return NextResponse.json({ error: 'You already have a position in this bet' }, { status: 400 });
   }
 
-  // Deduct credits and place position
   await sql`UPDATE users SET credits = credits - ${credits} WHERE id = ${user.id}`;
   await sql`
     INSERT INTO bet_positions (bet_id, user_id, side, amount)
     VALUES (${betId}, ${user.id}, ${side}, ${credits})
   `;
 
-  // Update totals
   if (side === 'yes') {
     await sql`UPDATE bets SET total_yes = total_yes + ${credits} WHERE id = ${betId}`;
   } else {

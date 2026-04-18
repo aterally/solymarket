@@ -38,7 +38,8 @@ export async function GET(req) {
 
   const { rows } = await sql`
     SELECT id, email, COALESCE(username, name) as display_name, name, username,
-           credits, is_admin, is_banned, last_ip, created_at
+           credits, is_admin, is_manager, is_banned, is_muted_comments, is_muted_proposing,
+           is_muted_markets, is_frozen, last_ip, banned_ips, created_at
     FROM users ORDER BY credits DESC
   `;
   return NextResponse.json(rows);
@@ -48,7 +49,8 @@ export async function POST(req) {
   const session = await getServerSession();
   if (!await requireAdmin(session)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
-  const { action, userId, amount } = await req.json();
+  const body = await req.json();
+  const { action, userId, amount } = body;
 
   if (action === 'adjust_credits') {
     const delta = parseInt(amount);
@@ -66,6 +68,79 @@ export async function POST(req) {
 
   if (action === 'unban') {
     await sql`UPDATE users SET is_banned = FALSE WHERE id = ${userId}`;
+    return NextResponse.json({ ok: true });
+  }
+
+  if (action === 'mute_comments') {
+    await sql`UPDATE users SET is_muted_comments = TRUE WHERE id = ${userId}`;
+    return NextResponse.json({ ok: true });
+  }
+
+  if (action === 'unmute_comments') {
+    await sql`UPDATE users SET is_muted_comments = FALSE WHERE id = ${userId}`;
+    return NextResponse.json({ ok: true });
+  }
+
+  if (action === 'mute_proposing') {
+    await sql`UPDATE users SET is_muted_proposing = TRUE WHERE id = ${userId}`;
+    return NextResponse.json({ ok: true });
+  }
+
+  if (action === 'unmute_proposing') {
+    await sql`UPDATE users SET is_muted_proposing = FALSE WHERE id = ${userId}`;
+    return NextResponse.json({ ok: true });
+  }
+
+  if (action === 'mute_markets') {
+    await sql`UPDATE users SET is_muted_markets = TRUE WHERE id = ${userId}`;
+    return NextResponse.json({ ok: true });
+  }
+
+  if (action === 'unmute_markets') {
+    await sql`UPDATE users SET is_muted_markets = FALSE WHERE id = ${userId}`;
+    return NextResponse.json({ ok: true });
+  }
+
+  if (action === 'freeze') {
+    await sql`UPDATE users SET is_frozen = TRUE WHERE id = ${userId}`;
+    return NextResponse.json({ ok: true });
+  }
+
+  if (action === 'unfreeze') {
+    await sql`UPDATE users SET is_frozen = FALSE WHERE id = ${userId}`;
+    return NextResponse.json({ ok: true });
+  }
+
+  if (action === 'ban_ip') {
+    const { ip } = body;
+    if (!ip) return NextResponse.json({ error: 'IP required' }, { status: 400 });
+    await sql`UPDATE users SET banned_ips = array_append(COALESCE(banned_ips, '{}'), ${ip}) WHERE id = ${userId}`;
+    return NextResponse.json({ ok: true });
+  }
+
+  if (action === 'make_admin') {
+    await sql`UPDATE users SET is_admin = TRUE, is_manager = FALSE WHERE id = ${userId}`;
+    return NextResponse.json({ ok: true });
+  }
+
+  if (action === 'revoke_admin') {
+    await sql`UPDATE users SET is_admin = FALSE WHERE id = ${userId}`;
+    return NextResponse.json({ ok: true });
+  }
+
+  if (action === 'make_manager') {
+    await sql`UPDATE users SET is_manager = TRUE WHERE id = ${userId}`;
+    return NextResponse.json({ ok: true });
+  }
+
+  if (action === 'revoke_manager') {
+    await sql`UPDATE users SET is_manager = FALSE WHERE id = ${userId}`;
+    return NextResponse.json({ ok: true });
+  }
+
+  if (action === 'delete_comment') {
+    const { commentId } = body;
+    await sql`DELETE FROM comments WHERE id = ${commentId}`;
     return NextResponse.json({ ok: true });
   }
 

@@ -10,8 +10,8 @@ export async function GET(req) {
     SELECT c.id, c.content, c.parent_id, c.created_at,
            COALESCE(u.username, u.name) as author_name,
            u.image as author_image,
-           (SELECT COUNT(*) FROM comment_likes cl WHERE cl.comment_id = c.id) as likes,
-           u.id as user_id
+           u.id as user_id,
+           (SELECT COUNT(*) FROM comment_likes cl WHERE cl.comment_id = c.id) as likes
     FROM comments c
     JOIN users u ON c.user_id = u.id
     WHERE c.bet_id = ${betId}
@@ -28,8 +28,9 @@ export async function POST(req) {
   if (!betId || !content?.trim()) return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
   if (content.trim().length > 1000) return NextResponse.json({ error: 'Too long' }, { status: 400 });
 
-  const { rows: userRows } = await sql`SELECT id, is_banned FROM users WHERE email = ${session.user.email}`;
+  const { rows: userRows } = await sql`SELECT id, is_banned, is_muted_comments FROM users WHERE email = ${session.user.email}`;
   if (!userRows[0] || userRows[0].is_banned) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  if (userRows[0].is_muted_comments) return NextResponse.json({ error: 'You are muted from commenting' }, { status: 403 });
 
   const { rows } = await sql`
     INSERT INTO comments (bet_id, user_id, content, parent_id)
@@ -39,4 +40,16 @@ export async function POST(req) {
 
   const result = { ...rows[0], author_name: session.user.username || session.user.name, author_image: session.user.image, likes: 0 };
   return NextResponse.json(result);
+}
+
+export async function DELETE(req) {
+  const session = await getServerSession();
+  if (!session?.user?.email) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  const { commentId } = await req.json();
+  const { rows: userRows } = await sql`SELECT id, is_admin FROM users WHERE email = ${session.user.email}`;
+  if (!userRows[0]?.is_admin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+
+  await sql`DELETE FROM comments WHERE id = ${commentId}`;
+  return NextResponse.json({ ok: true });
 }

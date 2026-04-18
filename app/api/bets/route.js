@@ -27,9 +27,10 @@ export async function POST(req) {
   const { title, description } = await req.json();
   if (!title?.trim()) return NextResponse.json({ error: 'Title required' }, { status: 400 });
 
-  const { rows: userRows } = await sql`SELECT id, is_banned FROM users WHERE email = ${session.user.email}`;
+  const { rows: userRows } = await sql`SELECT id, is_banned, is_muted_markets FROM users WHERE email = ${session.user.email}`;
   if (!userRows[0]) return NextResponse.json({ error: 'User not found' }, { status: 404 });
   if (userRows[0].is_banned) return NextResponse.json({ error: 'Account banned' }, { status: 403 });
+  if (userRows[0].is_muted_markets) return NextResponse.json({ error: 'You are not allowed to create markets' }, { status: 403 });
 
   const { rows } = await sql`
     INSERT INTO bets (title, description, creator_id, status)

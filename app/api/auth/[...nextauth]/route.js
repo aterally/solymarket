@@ -12,40 +12,47 @@ const handler = NextAuth({
   callbacks: {
     async signIn({ user }) {
       try {
-        const { rows: existing } = await sql`SELECT id, is_banned FROM users WHERE email = ${user.email}`;
-        if (existing.length === 0) {
-          const isAdmin = user.email === process.env.ADMIN_EMAIL;
-          await sql`
-            INSERT INTO users (id, email, name, image, credits, is_admin, is_banned)
-            VALUES (${user.id}, ${user.email}, ${user.name}, ${user.image}, 100, ${isAdmin}, FALSE)
-          `;
-        } else {
-          if (existing[0].is_banned) return false; // block banned users
-          const isAdmin = user.email === process.env.ADMIN_EMAIL;
-          await sql`UPDATE users SET name = ${user.name}, image = ${user.image}, is_admin = ${isAdmin} WHERE email = ${user.email}`;
-        }
+        const adminEmail = process.env.ADMIN_EMAIL;
+        await sql`
+          INSERT INTO users (id, email, name, image, credits, is_admin)
+          VALUES (${user.id}, ${user.email}, ${user.name}, ${user.image}, 100, ${user.email === adminEmail})
+          ON CONFLICT (email) DO UPDATE SET
+            name = EXCLUDED.name,
+            image = EXCLUDED.image,
+            is_admin = CASE WHEN users.email = ${adminEmail} THEN TRUE ELSE users.is_admin END
+        `;
+        const { rows } = await sql`SELECT is_banned FROM users WHERE email = ${user.email}`;
+        if (rows[0]?.is_banned) return '/banned';
         return true;
       } catch (err) {
         console.error('SignIn error:', err);
-        return false;
+        return true;
       }
     },
     async session({ session }) {
       if (session?.user?.email) {
-        const { rows } = await sql`SELECT * FROM users WHERE email = ${session.user.email}`;
-        if (rows[0]) {
-          session.user.id = rows[0].id;
-          session.user.credits = rows[0].credits;
-          session.user.isAdmin = rows[0].is_admin;
-          session.user.username = rows[0].username;
-          session.user.hasUsername = !!rows[0].username;
+        try {
+          const { rows } = await sql`
+            SELECT id, username, is_admin, is_manager, is_banned, is_frozen
+            FROM users WHERE email = ${session.user.email}
+          `;
+          if (rows[0]) {
+            session.user.id = rows[0].id;
+            session.user.username = rows[0].username;
+            session.user.isAdmin = rows[0].is_admin;
+            session.user.isManager = rows[0].is_manager;
+            session.user.hasUsername = !!rows[0].username;
+          }
+        } catch (err) {
+          console.error('Session error:', err);
         }
       }
       return session;
     },
   },
-  pages: { signIn: '/' },
-  secret: process.env.NEXTAUTH_SECRET,
+  pages: {
+    signIn: '/',
+  },
 });
 
 export { handler as GET, handler as POST };
