@@ -13,40 +13,13 @@ export async function GET(req, { params }) {
     `;
     if (!betRows[0]) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
-    // Compute totals from bet_positions (tracks individual trades)
-    const { rows: totalsRows } = await sql`
-      SELECT
-        COALESCE(SUM(CASE WHEN side = 'yes' THEN amount ELSE 0 END), 0) as pos_yes,
-        COALESCE(SUM(CASE WHEN side = 'no'  THEN amount ELSE 0 END), 0) as pos_no
-      FROM bet_positions
-      WHERE bet_id = ${id}
-    `;
-    const posYes   = parseInt(totalsRows[0].pos_yes);
-    const posNo    = parseInt(totalsRows[0].pos_no);
+    // Trust total_yes / total_no already stored on the bets row.
+    // The POST /place route is the single writer that keeps these in sync.
+    // We never recompute + overwrite here — that was destroying data for markets
+    // whose positions lived only in the bets table (pre-bet_positions era).
+    const bet = { ...betRows[0] };
 
-    // Use the HIGHER of bet_positions sum vs bets table value.
-    // This preserves totals for markets where total_yes/total_no was set directly
-    // (e.g. before bet_positions tracking existed), while still reflecting new trades.
-    const tableYes = parseInt(betRows[0].total_yes) || 0;
-    const tableNo  = parseInt(betRows[0].total_no)  || 0;
-    const realYes  = Math.max(posYes, tableYes);
-    const realNo   = Math.max(posNo,  tableNo);
-
-    // Only write back if bet_positions has MORE — never overwrite a higher value with 0
-    if (posYes > tableYes || posNo > tableNo) {
-      await sql`
-        UPDATE bets SET total_yes = ${realYes}, total_no = ${realNo}
-        WHERE id = ${id}
-      `;
-    }
-
-    const bet = {
-      ...betRows[0],
-      total_yes: realYes,
-      total_no:  realNo,
-    };
-
-    // Positions: one row per unique user showing both sides
+    // Positions: one row per unique user (for the trade-history table)
     const { rows: positions } = await sql`
       SELECT
         COALESCE(u.username, u.name) as user_name,
@@ -66,7 +39,7 @@ export async function GET(req, { params }) {
       ORDER BY SUM(bp.amount) DESC
     `;
 
-    // Probability history: 5-min buckets from actual trades (running total)
+    // Probability history: 5-min buckets from individual trades
     const { rows: trades } = await sql`
       SELECT side, amount, created_at,
         date_trunc('hour', created_at) +
@@ -87,11 +60,13 @@ export async function GET(req, { params }) {
       buckets.set(new Date(t.bucket).toISOString(), pct);
     }
 
-    // If no bet_positions history at all, synthesise a single point from the bets table
-    // so the chart and probability bar show the correct current value.
-    if (buckets.size === 0 && (realYes > 0 || realNo > 0)) {
-      const total = realYes + realNo;
-      const pct   = Math.round((realYes / total) * 100);
+    // No bet_positions rows? Synthesise one history point from the bets table totals
+    // so the chart renders the correct probability instead of a flat 50% line.
+    const tableYes = parseInt(bet.total_yes) || 0;
+    const tableNo  = parseInt(bet.total_no)  || 0;
+    if (buckets.size === 0 && (tableYes > 0 || tableNo > 0)) {
+      const tot = tableYes + tableNo;
+      const pct = Math.round((tableYes / tot) * 100);
       buckets.set(new Date().toISOString(), pct);
     }
 

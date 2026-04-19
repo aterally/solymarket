@@ -6,13 +6,31 @@ import { sanitizeText } from '@/lib/sanitize';
 
 export async function GET(req) {
   try {
+    // Compute live totals from bet_positions (source of truth).
+    // Fall back to bets.total_yes / total_no when no positions exist yet
+    // (preserves data for markets created before bet_positions tracking).
     const { rows } = await sql`
-      SELECT b.*,
+      SELECT
+        b.*,
         COALESCE(u.username, u.name) as creator_name,
-        (SELECT COUNT(DISTINCT bp.user_id) FROM bet_positions bp WHERE bp.bet_id = b.id) as participant_count
+        COUNT(DISTINCT bp.user_id) as participant_count,
+        CASE
+          WHEN COALESCE(SUM(CASE WHEN bp.side = 'yes' THEN bp.amount END), 0) > 0
+            OR COALESCE(SUM(CASE WHEN bp.side = 'no'  THEN bp.amount END), 0) > 0
+          THEN COALESCE(SUM(CASE WHEN bp.side = 'yes' THEN bp.amount END), 0)
+          ELSE b.total_yes
+        END as total_yes,
+        CASE
+          WHEN COALESCE(SUM(CASE WHEN bp.side = 'yes' THEN bp.amount END), 0) > 0
+            OR COALESCE(SUM(CASE WHEN bp.side = 'no'  THEN bp.amount END), 0) > 0
+          THEN COALESCE(SUM(CASE WHEN bp.side = 'no'  THEN bp.amount END), 0)
+          ELSE b.total_no
+        END as total_no
       FROM bets b
       LEFT JOIN users u ON b.creator_id = u.id
+      LEFT JOIN bet_positions bp ON bp.bet_id = b.id
       WHERE b.deleted_at IS NULL
+      GROUP BY b.id, u.username, u.name
       ORDER BY b.created_at DESC
     `;
     return NextResponse.json(rows);

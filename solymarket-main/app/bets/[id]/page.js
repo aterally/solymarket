@@ -1,6 +1,6 @@
 'use client';
 import { useSession } from 'next-auth/react';
-import { useEffect, useState, useRef, useCallback } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import Link from 'next/link';
 import { Navbar } from '../../Navbar';
 
@@ -503,38 +503,48 @@ export default function BetPage({ params }) {
   const [myPosition, setMyPosition] = useState(null);
   const [userCredits, setUserCredits] = useState(null);
 
-  const load = useCallback(async () => {
-    const res = await fetch(`/api/bets/${params.id}`);
-    const d = await res.json();
-    if (d.bet) {
-      setData(d);
-      // Update history from DB (sorted 5-min bucket snapshots)
-      if (Array.isArray(d.history)) setHistory(d.history);
+  // Keep latest session in a ref so the polling interval always reads the
+  // current value without needing to restart when session changes.
+  const sessionRef = useRef(session);
+  useEffect(() => { sessionRef.current = session; }, [session]);
 
-      if (session?.user?.email) {
-        const meRes = await fetch('/api/user/me');
-        const me = await meRes.json();
-        if (me.user) setUserCredits(me.user.credits);
-        if (me.positions) {
-          const betPositions = me.positions.filter(p => p.bet_id === parseInt(params.id));
-          if (betPositions.length > 0) {
+  // Keep a ref to the manual-refresh function so placeBet/AdminSidebar can call it.
+  const refreshRef = useRef(null);
+
+  const betId = params.id;
+
+  useEffect(() => {
+    async function doFetch() {
+      try {
+        const res = await fetch(`/api/bets/${betId}`);
+        if (!res.ok) return;
+        const d = await res.json();
+        if (!d.bet) return;
+        setData(d);
+        if (Array.isArray(d.history)) setHistory(d.history);
+        setLoading(false);
+
+        const sess = sessionRef.current;
+        if (sess?.user?.email) {
+          const meRes = await fetch('/api/user/me');
+          if (!meRes.ok) return;
+          const me = await meRes.json();
+          if (me.user) setUserCredits(me.user.credits);
+          if (me.positions) {
+            const betPositions = me.positions.filter(p => p.bet_id === parseInt(betId));
             const yesTotal = betPositions.filter(p => p.side === 'yes').reduce((s, p) => s + parseInt(p.amount), 0);
             const noTotal  = betPositions.filter(p => p.side === 'no').reduce((s, p) => s + parseInt(p.amount), 0);
             if (yesTotal > 0 || noTotal > 0) setMyPosition({ side: yesTotal >= noTotal ? 'yes' : 'no', amount: yesTotal + noTotal, yes_amount: yesTotal, no_amount: noTotal });
           }
         }
-      }
+      } catch (e) { /* network blip — next tick will retry */ }
     }
-    setLoading(false);
-  }, [session, params.id]);
 
-  useEffect(() => {
-    if (session !== undefined) {
-      load();
-      const iv = setInterval(load, 5000);
-      return () => clearInterval(iv);
-    }
-  }, [load]);
+    refreshRef.current = doFetch;
+    doFetch();
+    const iv = setInterval(doFetch, 5000);
+    return () => clearInterval(iv);
+  }, [betId]);
 
   async function placeBet() {
     const credits = parseInt(amount);
@@ -547,7 +557,7 @@ export default function BetPage({ params }) {
     setSuccess(`Placed ${credits} sl on ${side.toUpperCase()}`);
     setUserCredits(d.credits);
     setAmount('');
-    load();
+    if (refreshRef.current) refreshRef.current();
     setTimeout(() => setSuccess(''), 4000);
   }
 
@@ -652,7 +662,7 @@ export default function BetPage({ params }) {
 
           {/* Right sidebar */}
           <div className="sticky-sidebar">
-            {isAdmin && <AdminSidebar bet={bet} onResolved={load} betId={params.id} />}
+            {isAdmin && <AdminSidebar bet={bet} onResolved={() => { if (refreshRef.current) refreshRef.current(); }} betId={params.id} />}
             {isManager && !isAdmin && <ManagerSidebar bet={bet} betId={params.id} />}
 
             {/* My position */}
