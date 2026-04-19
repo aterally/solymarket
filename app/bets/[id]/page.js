@@ -4,31 +4,43 @@ import { useEffect, useState, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import { Navbar } from '../../Navbar';
 
-// ── Live probability chart ─────────────────────────────
-function YesNoChart({ history }) {
+// ── Probability chart ──────────────────────────────────
+// history = array of { t: isoString, pct: number }
+// currentPct = live current value (shown as rightmost point)
+function YesNoChart({ history, currentPct }) {
   const canvasRef = useRef(null);
-  const wrapRef = useRef(null);
-  const [tooltip, setTooltip] = useState(null);
+  const wrapRef  = useRef(null);
+  const [tooltip, setTooltip] = useState(null); // index into points array
+
+  // Build the points array: history snapshots + current live value
+  const points = (() => {
+    const h = (history || []).map(p => p.pct);
+    // If no history at all, just show the current pct as a flat line
+    if (h.length === 0) return [currentPct];
+    // Append current if it differs from last snapshot
+    if (h[h.length - 1] !== currentPct) return [...h, currentPct];
+    return h;
+  })();
 
   useEffect(() => {
     function draw() {
       const canvas = canvasRef.current;
-      const wrap = wrapRef.current;
+      const wrap   = wrapRef.current;
       if (!canvas || !wrap) return;
       const dpr = window.devicePixelRatio || 1;
       const W = wrap.clientWidth;
       const H = wrap.clientHeight;
       if (W === 0 || H === 0) return;
-      canvas.width = W * dpr;
+      canvas.width  = W * dpr;
       canvas.height = H * dpr;
-      canvas.style.width = W + 'px';
+      canvas.style.width  = W + 'px';
       canvas.style.height = H + 'px';
       const ctx = canvas.getContext('2d');
       ctx.scale(dpr, dpr);
       ctx.clearRect(0, 0, W, H);
 
-      // Grid lines
-      ctx.strokeStyle = 'rgba(50,50,50,0.7)';
+      // Grid
+      ctx.strokeStyle = 'rgba(50,50,50,0.8)';
       ctx.lineWidth = 1;
       [25, 50, 75].forEach(pct => {
         const y = H - (pct / 100) * H;
@@ -41,59 +53,41 @@ function YesNoChart({ history }) {
         ctx.fillText(pct + '%', W - 4, H - (pct / 100) * H - 3);
       });
 
-      if (!history || history.length === 0) return;
-
-      // Draw flat line if only one point
-      if (history.length === 1) {
-        const y = H - (history[0] / 100) * H;
+      if (points.length === 1) {
+        // Flat line across entire width
+        const y = H - (points[0] / 100) * H;
         ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y);
         ctx.strokeStyle = '#22c55e'; ctx.lineWidth = 2.5; ctx.stroke();
-        // Dot
-        ctx.beginPath(); ctx.arc(W, y, 4, 0, Math.PI * 2);
+        // End dot
+        ctx.beginPath(); ctx.arc(W - 2, y, 4, 0, Math.PI * 2);
         ctx.fillStyle = '#22c55e'; ctx.fill();
         return;
       }
 
-      const stepX = W / (history.length - 1);
+      const stepX = W / (points.length - 1);
 
       // Gradient fill
       ctx.beginPath();
-      history.forEach((v, i) => {
-        const x = i * stepX;
-        const y = H - (v / 100) * H;
-        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
-      });
-      const lastX2 = (history.length - 1) * stepX;
-      ctx.lineTo(lastX2, H); ctx.lineTo(0, H); ctx.closePath();
+      points.forEach((v, i) => { const x = i * stepX; const y = H - (v / 100) * H; i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y); });
+      ctx.lineTo((points.length - 1) * stepX, H); ctx.lineTo(0, H); ctx.closePath();
       const grad = ctx.createLinearGradient(0, 0, 0, H);
-      grad.addColorStop(0, 'rgba(34,197,94,0.18)');
-      grad.addColorStop(1, 'rgba(34,197,94,0)');
-      ctx.fillStyle = grad;
-      ctx.fill();
+      grad.addColorStop(0, 'rgba(34,197,94,0.2)'); grad.addColorStop(1, 'rgba(34,197,94,0)');
+      ctx.fillStyle = grad; ctx.fill();
 
       // Line
       ctx.beginPath();
-      history.forEach((v, i) => {
-        const x = i * stepX;
-        const y = H - (v / 100) * H;
-        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
-      });
-      ctx.strokeStyle = '#22c55e';
-      ctx.lineWidth = 2.5;
-      ctx.lineJoin = 'round';
-      ctx.stroke();
+      points.forEach((v, i) => { const x = i * stepX; const y = H - (v / 100) * H; i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y); });
+      ctx.strokeStyle = '#22c55e'; ctx.lineWidth = 2.5; ctx.lineJoin = 'round'; ctx.stroke();
 
       // End dot
-      const lastX = (history.length - 1) * stepX;
-      const lastY = H - (history[history.length - 1] / 100) * H;
-      ctx.beginPath(); ctx.arc(lastX, lastY, 4, 0, Math.PI * 2);
-      ctx.fillStyle = '#22c55e'; ctx.fill();
+      const lx = (points.length - 1) * stepX;
+      const ly = H - (points[points.length - 1] / 100) * H;
+      ctx.beginPath(); ctx.arc(lx, ly, 4, 0, Math.PI * 2); ctx.fillStyle = '#22c55e'; ctx.fill();
 
-      // Tooltip line
-      if (tooltip !== null && history.length > 1) {
-        const idx = tooltip;
-        const tx = (idx / (history.length - 1)) * W;
-        const ty = H - (history[idx] / 100) * H;
+      // Tooltip crosshair
+      if (tooltip !== null) {
+        const tx = (tooltip / (points.length - 1)) * W;
+        const ty = H - (points[tooltip] / 100) * H;
         ctx.beginPath(); ctx.moveTo(tx, 0); ctx.lineTo(tx, H);
         ctx.strokeStyle = 'rgba(34,197,94,0.3)'; ctx.lineWidth = 1;
         ctx.setLineDash([3, 3]); ctx.stroke(); ctx.setLineDash([]);
@@ -107,19 +101,16 @@ function YesNoChart({ history }) {
     const ro = new ResizeObserver(draw);
     if (wrapRef.current) ro.observe(wrapRef.current);
     return () => ro.disconnect();
-  }, [history, tooltip]);
+  }, [points, tooltip]);
 
   function handleMouseMove(e) {
-    if (!history || history.length < 2) return;
+    if (points.length < 2) return;
     const wrap = wrapRef.current;
     if (!wrap) return;
     const rect = wrap.getBoundingClientRect();
-    const mx = e.clientX - rect.left;
-    const idx = Math.max(0, Math.min(history.length - 1, Math.round((mx / rect.width) * (history.length - 1))));
+    const idx = Math.max(0, Math.min(points.length - 1, Math.round(((e.clientX - rect.left) / rect.width) * (points.length - 1))));
     setTooltip(idx);
   }
-
-  const tooltipPct = tooltip !== null && history ? history[tooltip] : null;
 
   return (
     <div style={{ marginBottom: 22 }}>
@@ -133,15 +124,16 @@ function YesNoChart({ history }) {
         onMouseLeave={() => setTooltip(null)}
       >
         <canvas ref={canvasRef} style={{ display: 'block' }} />
-        {tooltipPct !== null && (
+        {tooltip !== null && points.length > 1 && (
           <div style={{
-            position: 'absolute', top: 10, left: Math.min(((tooltip / (history.length - 1)) * 100), 80) + '%',
+            position: 'absolute', top: 10,
+            left: Math.min(Math.max((tooltip / (points.length - 1)) * 100, 5), 80) + '%',
             transform: 'translateX(-50%)',
             background: 'var(--surface3)', border: '1px solid var(--border2)',
             borderRadius: 'var(--radius)', padding: '3px 8px', pointerEvents: 'none',
             fontSize: '0.78rem', color: 'var(--yes)', fontFamily: 'var(--font-mono)', fontWeight: 700,
           }}>
-            {tooltipPct}%
+            {points[tooltip]}%
           </div>
         )}
       </div>
@@ -255,7 +247,7 @@ function Comment({ comment, allComments, session, betId, onReplyPosted, onDelete
   };
 
   return (
-    <div className="comment" style={{ paddingLeft: depth > 0 ? 0 : undefined }}>
+    <div className="comment">
       <div className="comment-header">
         {comment.author_image
           ? <img src={comment.author_image} alt="" className="comment-avatar" />
@@ -316,21 +308,11 @@ function CommentsSection({ betId, session, isAdmin }) {
   const fileRef = useRef(null);
 
   useEffect(() => {
-    fetch(`/api/comments?betId=${betId}`).then(r => r.json()).then(d => { setComments(Array.isArray(d) ? d : []); setLoading(false); });
-    const iv = setInterval(() => {
-      fetch(`/api/comments?betId=${betId}`).then(r => r.json()).then(d => { if (Array.isArray(d)) setComments(d); });
-    }, 8000);
+    const load = () => fetch(`/api/comments?betId=${betId}`).then(r => r.json()).then(d => { if (Array.isArray(d)) { setComments(d); setLoading(false); } });
+    load();
+    const iv = setInterval(load, 8000);
     return () => clearInterval(iv);
   }, [betId]);
-
-  function handleFileChange(e) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (!file.type.startsWith('image/')) return setErr('Only images allowed');
-    const reader = new FileReader();
-    reader.onload = ev => setPendingImage(ev.target.result);
-    reader.readAsDataURL(file);
-  }
 
   async function postComment() {
     if (!newComment.trim() && !pendingImage) return;
@@ -366,21 +348,18 @@ function CommentsSection({ betId, session, isAdmin }) {
               <label style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text3)', fontSize: '0.82rem' }}>
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
                 Photo
-                <input ref={fileRef} type="file" accept="image/*" onChange={handleFileChange} style={{ display: 'none' }} />
+                <input ref={fileRef} type="file" accept="image/*" onChange={e => { const f = e.target.files?.[0]; if (!f) return; const r = new FileReader(); r.onload = ev => setPendingImage(ev.target.result); r.readAsDataURL(f); }} style={{ display: 'none' }} />
               </label>
               <button className="btn btn-primary btn-sm" onClick={postComment} disabled={posting || (!newComment.trim() && !pendingImage)}>{posting ? '...' : 'Comment'}</button>
             </div>
           </div>
         )}
-        {loading ? (
-          <div style={{ color: 'var(--text3)', padding: '20px 0', fontSize: '0.9rem' }}>Loading comments...</div>
-        ) : topLevel.length === 0 ? (
-          <div style={{ color: 'var(--text3)', padding: '20px 0', fontSize: '0.9rem' }}>No comments yet.</div>
-        ) : (
-          <div className="comment-list">
-            {topLevel.map(c => <Comment key={c.id} comment={c} allComments={comments} session={session} betId={betId} onReplyPosted={reply => setComments(prev => [...prev, reply])} onDeleted={id => setComments(prev => prev.filter(c => c.id !== id && c.parent_id !== id))} isAdmin={isAdmin} />)}
-          </div>
-        )}
+        {loading
+          ? <div style={{ color: 'var(--text3)', padding: '20px 0', fontSize: '0.9rem' }}>Loading comments...</div>
+          : topLevel.length === 0
+            ? <div style={{ color: 'var(--text3)', padding: '20px 0', fontSize: '0.9rem' }}>No comments yet.</div>
+            : <div className="comment-list">{topLevel.map(c => <Comment key={c.id} comment={c} allComments={comments} session={session} betId={betId} onReplyPosted={r => setComments(prev => [...prev, r])} onDeleted={id => setComments(prev => prev.filter(c => c.id !== id && c.parent_id !== id))} isAdmin={isAdmin} />)}</div>
+        }
       </div>
     </div>
   );
@@ -397,41 +376,30 @@ function AdminSidebar({ bet, onResolved, betId }) {
 
   useEffect(() => {
     if (bet.status !== 'open') return;
-    const load = async () => {
-      const res = await fetch(`/api/proposals?betId=${betId}`);
-      const d = await res.json();
-      if (res.ok) setProposals(d);
-    };
-    load();
-    const iv = setInterval(load, 8000);
-    return () => clearInterval(iv);
+    const load = async () => { const res = await fetch(`/api/proposals?betId=${betId}`); const d = await res.json(); if (res.ok) setProposals(d); };
+    load(); const iv = setInterval(load, 8000); return () => clearInterval(iv);
   }, [betId, bet.status]);
 
   async function resolve() {
     setLoading(true); setErr(''); setMsg('');
     const res = await fetch('/api/admin/resolve', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ betId: bet.id, outcome }) });
-    const d = await res.json();
-    setLoading(false);
+    const d = await res.json(); setLoading(false);
     if (!res.ok) return setErr(d.error);
-    setMsg(`Resolved ${outcome.toUpperCase()}.`);
-    onResolved();
+    setMsg(`Resolved ${outcome.toUpperCase()}.`); onResolved();
   }
 
   async function refund() {
     setLoading(true); setErr(''); setMsg('');
     const res = await fetch('/api/admin/refund', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ betId: bet.id }) });
-    const d = await res.json();
-    setLoading(false);
+    const d = await res.json(); setLoading(false);
     if (!res.ok) return setErr(d.error);
-    setMsg(`Refunded ${d.refunded} participants.`);
-    onResolved();
+    setMsg(`Refunded ${d.refunded} participants.`); onResolved();
   }
 
   async function deleteBet() {
     setLoading(true); setErr('');
     const res = await fetch('/api/admin/delete', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ betId: bet.id }) });
-    const d = await res.json();
-    setLoading(false);
+    const d = await res.json(); setLoading(false);
     if (!res.ok) return setErr(d.error);
     window.location.href = '/';
   }
@@ -442,13 +410,11 @@ function AdminSidebar({ bet, onResolved, betId }) {
       <div style={{ fontSize: '0.84rem', color: 'var(--text2)', marginBottom: 14 }}>Market is closed.</div>
       {!confirmDelete
         ? <button className="btn btn-danger btn-sm" style={{ width: '100%', justifyContent: 'center' }} onClick={() => setConfirmDelete(true)}>Delete market</button>
-        : <>
-            <div style={{ fontSize: '0.82rem', color: 'var(--text2)', marginBottom: 10 }}>Permanently delete?</div>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button className="btn btn-ghost btn-sm" style={{ flex: 1, justifyContent: 'center' }} onClick={() => setConfirmDelete(false)}>Cancel</button>
-              <button className="btn btn-danger btn-sm" style={{ flex: 2, justifyContent: 'center' }} onClick={deleteBet} disabled={loading}>{loading ? '...' : 'Delete'}</button>
-            </div>
-          </>
+        : <><div style={{ fontSize: '0.82rem', color: 'var(--text2)', marginBottom: 10 }}>Permanently delete?</div>
+           <div style={{ display: 'flex', gap: 8 }}>
+             <button className="btn btn-ghost btn-sm" style={{ flex: 1, justifyContent: 'center' }} onClick={() => setConfirmDelete(false)}>Cancel</button>
+             <button className="btn btn-danger btn-sm" style={{ flex: 2, justifyContent: 'center' }} onClick={deleteBet} disabled={loading}>{loading ? '...' : 'Delete'}</button>
+           </div></>
       }
       {err && <div className="error-msg" style={{ marginTop: 8 }}>{err}</div>}
     </div>
@@ -485,7 +451,6 @@ function AdminSidebar({ bet, onResolved, betId }) {
   );
 }
 
-// ── Manager sidebar ────────────────────────────────────
 function ManagerSidebar({ bet, betId }) {
   const [outcome, setOutcome] = useState('yes');
   const [loading, setLoading] = useState(false);
@@ -495,15 +460,14 @@ function ManagerSidebar({ bet, betId }) {
   async function submitProposal() {
     setLoading(true); setErr(''); setMsg('');
     const res = await fetch('/api/manager', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ betId: parseInt(betId), outcome }) });
-    const d = await res.json();
-    setLoading(false);
+    const d = await res.json(); setLoading(false);
     if (!res.ok) return setErr(d.error);
     setMsg('Proposal submitted for admin review.');
   }
 
   if (bet.status !== 'open') return (
     <div className="card" style={{ borderColor: 'var(--border2)' }}>
-      <div style={{ fontSize: '0.68rem', color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 700, marginBottom: 8 }}>Manager</div>
+      <div style={{ fontSize: '0.68rem', color: 'var(--text3)', textTransform: 'uppercase', fontWeight: 700, marginBottom: 8 }}>Manager</div>
       <div style={{ fontSize: '0.84rem', color: 'var(--text2)' }}>Market is closed.</div>
     </div>
   );
@@ -529,6 +493,7 @@ function ManagerSidebar({ bet, betId }) {
 export default function BetPage({ params }) {
   const { data: session } = useSession();
   const [data, setData] = useState(null);
+  const [history, setHistory] = useState([]); // [{t, pct}] from DB
   const [loading, setLoading] = useState(true);
   const [side, setSide] = useState('yes');
   const [amount, setAmount] = useState('');
@@ -537,23 +502,14 @@ export default function BetPage({ params }) {
   const [success, setSuccess] = useState('');
   const [myPosition, setMyPosition] = useState(null);
   const [userCredits, setUserCredits] = useState(null);
-  // History of yesPct snapshots for chart
-  const [probHistory, setProbHistory] = useState([]);
 
   const load = useCallback(async () => {
     const res = await fetch(`/api/bets/${params.id}`);
     const d = await res.json();
     if (d.bet) {
       setData(d);
-      // Compute yesPct and add to history
-      const total = (d.bet.total_yes || 0) + (d.bet.total_no || 0);
-      const pct = total > 0 ? Math.round((d.bet.total_yes / total) * 100) : 50;
-      setProbHistory(prev => {
-        if (prev.length === 0) return [pct];
-        if (prev[prev.length - 1] === pct) return prev;
-        const next = [...prev, pct];
-        return next.length > 200 ? next.slice(-200) : next;
-      });
+      // Update history from DB (sorted 5-min bucket snapshots)
+      if (Array.isArray(d.history)) setHistory(d.history);
 
       if (session?.user?.email) {
         const meRes = await fetch('/api/user/me');
@@ -563,7 +519,7 @@ export default function BetPage({ params }) {
           const betPositions = me.positions.filter(p => p.bet_id === parseInt(params.id));
           if (betPositions.length > 0) {
             const yesTotal = betPositions.filter(p => p.side === 'yes').reduce((s, p) => s + parseInt(p.amount), 0);
-            const noTotal = betPositions.filter(p => p.side === 'no').reduce((s, p) => s + parseInt(p.amount), 0);
+            const noTotal  = betPositions.filter(p => p.side === 'no').reduce((s, p) => s + parseInt(p.amount), 0);
             if (yesTotal > 0 || noTotal > 0) setMyPosition({ side: yesTotal >= noTotal ? 'yes' : 'no', amount: yesTotal + noTotal, yes_amount: yesTotal, no_amount: noTotal });
           }
         }
@@ -575,7 +531,7 @@ export default function BetPage({ params }) {
   useEffect(() => {
     if (session !== undefined) {
       load();
-      const iv = setInterval(load, 5000); // live refresh every 5s
+      const iv = setInterval(load, 5000);
       return () => clearInterval(iv);
     }
   }, [load]);
@@ -596,14 +552,23 @@ export default function BetPage({ params }) {
   }
 
   if (loading) return <><Navbar /><div className="loading"><span style={{ color: 'var(--yes)' }}>●</span> Loading market...</div></>;
-  if (!data) return <><Navbar /><div className="page"><p style={{ color: 'var(--text2)' }}>Market not found or deleted.</p></div></>;
+  if (!data)   return <><Navbar /><div className="page"><p style={{ color: 'var(--text2)' }}>Market not found or deleted.</p></div></>;
 
   const { bet, positions } = data;
-  const total = (bet.total_yes || 0) + (bet.total_no || 0);
+
+  // ── Core numbers ──
+  const totalYes = parseInt(bet.total_yes) || 0;
+  const totalNo  = parseInt(bet.total_no)  || 0;
+  const total    = totalYes + totalNo;
   const hasVotes = total > 0;
-  const yesPct = hasVotes ? Math.round((bet.total_yes / total) * 100) : 50;
-  const noPct = 100 - yesPct;
-  const isAdmin = session?.user?.isAdmin;
+  // yesPct: if only YES votes → 100%, only NO → 0%, mixed → proportional
+  const yesPct   = hasVotes ? Math.round((totalYes / total) * 100) : 50;
+  const noPct    = 100 - yesPct;
+
+  // Unique participant count
+  const participantCount = positions.length;
+
+  const isAdmin   = session?.user?.isAdmin;
   const isManager = session?.user?.isManager;
 
   return (
@@ -616,7 +581,7 @@ export default function BetPage({ params }) {
         </Link>
 
         <div className="two-col">
-          {/* Left column */}
+          {/* Left */}
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14, flexWrap: 'wrap' }}>
               <span className={`status-badge status-${bet.status}`}>{bet.status}</span>
@@ -628,46 +593,48 @@ export default function BetPage({ params }) {
             <h1 className="market-title">{bet.title}</h1>
             {bet.description && <p style={{ color: 'var(--text2)', fontSize: '0.9rem', marginBottom: 22, lineHeight: 1.65 }}>{bet.description}</p>}
 
-            {/* Live chart — starts at 50% if no votes, jumps correctly with votes */}
-            <YesNoChart history={probHistory.length > 0 ? probHistory : [yesPct]} />
+            {/* Chart — history from DB, currentPct is the live value */}
+            <YesNoChart history={history} currentPct={yesPct} />
 
-            {/* Probability bar */}
+            {/* Probability bar — live values */}
             <div style={{ marginBottom: 22 }}>
               <div className="bar-container" style={{ height: 7, marginBottom: 10 }}>
-                <div className="bar-yes" style={{ width: (hasVotes ? yesPct : 50) + '%' }} />
-                <div className="bar-no" style={{ width: (hasVotes ? noPct : 50) + '%' }} />
+                <div className="bar-yes" style={{ width: yesPct + '%' }} />
+                <div className="bar-no"  style={{ width: noPct  + '%' }} />
               </div>
               <div className="bar-labels">
-                <span className="yes-label">YES {hasVotes ? yesPct : 50}% · {bet.total_yes || 0} sl</span>
+                <span className="yes-label">YES {yesPct}% · {totalYes} sl</span>
                 <span className="total-pool">{total.toLocaleString()} sl total</span>
-                <span className="no-label">{bet.total_no || 0} sl · {hasVotes ? noPct : 50}% NO</span>
+                <span className="no-label">{totalNo} sl · {noPct}% NO</span>
               </div>
             </div>
 
             <div style={{ color: 'var(--text3)', fontSize: '0.8rem', marginBottom: 22 }}>
-              {positions.length} participant{positions.length !== 1 ? 's' : ''}
+              {participantCount} participant{participantCount !== 1 ? 's' : ''}
             </div>
 
-            {/* Positions list */}
+            {/* Positions — one row per unique user */}
             {positions.length > 0 && (
               <div style={{ marginBottom: 32 }}>
                 <div style={{ fontSize: '0.68rem', color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10, fontWeight: 700 }}>Positions</div>
                 <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', overflow: 'hidden' }}>
                   {positions.map((p, i) => {
+                    // P&L calculation
                     let pnl = null;
                     if (bet.status === 'resolved' && bet.outcome) {
-                      if (p.side === bet.outcome) {
-                        const winnerPool = bet.outcome === 'yes' ? (bet.total_yes || 0) : (bet.total_no || 0);
-                        const payout = winnerPool > 0 ? Math.round((p.amount / winnerPool) * total) : 0;
-                        pnl = payout - p.amount;
-                      } else { pnl = -p.amount; }
+                      const myWin = bet.outcome === 'yes' ? parseInt(p.yes_amount) : parseInt(p.no_amount);
+                      const winPool = bet.outcome === 'yes' ? totalYes : totalNo;
+                      const payout = myWin > 0 && winPool > 0 ? Math.round((myWin / winPool) * total) : 0;
+                      pnl = payout - parseInt(p.amount);
                     }
+                    // Show dominant side badge
+                    const dominant = parseInt(p.yes_amount) >= parseInt(p.no_amount) ? 'yes' : 'no';
                     return (
-                      <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '11px 16px', borderBottom: i < positions.length - 1 ? '1px solid var(--border)' : 'none', fontSize: '0.88rem' }}>
+                      <div key={p.user_id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '11px 16px', borderBottom: i < positions.length - 1 ? '1px solid var(--border)' : 'none', fontSize: '0.88rem' }}>
                         <Link href={`/user/${encodeURIComponent(p.user_name)}`} style={{ color: 'var(--text)', fontWeight: 500 }}>{p.user_name}</Link>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-                          <span style={{ color: p.side === 'yes' ? 'var(--yes)' : 'var(--no)', fontWeight: 700 }}>{p.side.toUpperCase()}</span>
-                          <span style={{ color: 'var(--text2)', fontFamily: 'var(--font-mono)' }}>{p.amount} sl</span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                          {parseInt(p.yes_amount) > 0 && <span style={{ color: 'var(--yes)', fontSize: '0.8rem', fontWeight: 600 }}>YES {p.yes_amount} sl</span>}
+                          {parseInt(p.no_amount)  > 0 && <span style={{ color: 'var(--no)',  fontSize: '0.8rem', fontWeight: 600 }}>NO {p.no_amount} sl</span>}
                           {bet.status === 'refunded'
                             ? <span style={{ color: 'var(--text3)', fontSize: '0.75rem' }}>refunded</span>
                             : pnl !== null && <span style={{ color: pnl >= 0 ? 'var(--yes)' : 'var(--no)', fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: '0.82rem' }}>{pnl >= 0 ? '+' : ''}{pnl} sl</span>
@@ -688,6 +655,7 @@ export default function BetPage({ params }) {
             {isAdmin && <AdminSidebar bet={bet} onResolved={load} betId={params.id} />}
             {isManager && !isAdmin && <ManagerSidebar bet={bet} betId={params.id} />}
 
+            {/* My position */}
             {!isAdmin && myPosition && (
               <div className="card">
                 <div style={{ fontSize: '0.68rem', color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 12, fontWeight: 700 }}>Your position</div>
@@ -724,7 +692,7 @@ export default function BetPage({ params }) {
                     <span style={{ fontSize: '0.8rem', color: 'var(--text3)' }}>Amount</span>
                     {userCredits !== null && <span style={{ fontSize: '0.73rem', color: 'var(--text3)' }}>Bal: <strong style={{ color: 'var(--text2)' }}>{userCredits.toLocaleString()} sl</strong></span>}
                   </div>
-                  <input type="number" min="1" max={userCredits || 100} placeholder="0" value={amount} onChange={e => setAmount(e.target.value)} onKeyDown={e => e.key === 'Enter' && placeBet()} style={{ textAlign: 'right', fontSize: '1.1rem', fontWeight: 700, fontFamily: 'var(--font-mono)' }} />
+                  <input type="number" min="1" placeholder="0" value={amount} onChange={e => setAmount(e.target.value)} onKeyDown={e => e.key === 'Enter' && placeBet()} style={{ textAlign: 'right', fontSize: '1.1rem', fontWeight: 700, fontFamily: 'var(--font-mono)' }} />
                 </div>
                 <div style={{ display: 'flex', gap: 4, marginBottom: 16 }}>
                   {[1, 5, 10, 100].map(v => (
@@ -732,7 +700,7 @@ export default function BetPage({ params }) {
                   ))}
                   <button onClick={() => setAmount(String(userCredits || ''))} style={{ flex: 1, padding: '5px 0', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', color: 'var(--text2)', fontSize: '0.77rem', cursor: 'pointer', fontWeight: 500 }}>Max</button>
                 </div>
-                {err && <div className="error-msg" style={{ marginBottom: 10 }}>{err}</div>}
+                {err     && <div className="error-msg"   style={{ marginBottom: 10 }}>{err}</div>}
                 {success && <div className="success-msg" style={{ marginBottom: 10 }}>{success}</div>}
                 <button onClick={placeBet} disabled={placing} style={{ width: '100%', padding: '12px', borderRadius: 'var(--radius)', fontWeight: 700, fontSize: '0.92rem', cursor: placing ? 'not-allowed' : 'pointer', background: side === 'yes' ? '#16a34a' : '#dc2626', border: 'none', color: '#fff', opacity: placing ? 0.5 : 1 }}>
                   {placing ? '...' : `Buy ${side.toUpperCase()}`}
@@ -740,9 +708,7 @@ export default function BetPage({ params }) {
                 <div style={{ marginTop: 10, fontSize: '0.68rem', color: 'var(--text3)', textAlign: 'center' }}>By trading, you agree to the Terms of Use.</div>
               </div>
             ) : bet.status !== 'open' ? (
-              <div className="card">
-                <div style={{ fontSize: '0.9rem', color: 'var(--text2)' }}>This market is closed.</div>
-              </div>
+              <div className="card"><div style={{ fontSize: '0.9rem', color: 'var(--text2)' }}>This market is closed.</div></div>
             ) : null}
 
             <ProposalWidget betId={params.id} betStatus={bet.status} session={session} />
