@@ -15,7 +15,7 @@ export async function POST(req, { params }) {
   try { body = await req.json(); } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
 
   const { side, amount } = body;
-  const betId = parseInt(params.id);
+  const betId  = parseInt(params.id);
   const credits = parseInt(amount);
 
   if (isNaN(betId)) return NextResponse.json({ error: 'Invalid bet id' }, { status: 400 });
@@ -24,24 +24,31 @@ export async function POST(req, { params }) {
 
   const { rows: userRows } = await sql`SELECT * FROM users WHERE email = ${session.user.email}`;
   const user = userRows[0];
-  if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 });
+  if (!user)         return NextResponse.json({ error: 'User not found' }, { status: 404 });
   if (user.is_banned) return NextResponse.json({ error: 'Account banned' }, { status: 403 });
   if (user.is_frozen) return NextResponse.json({ error: 'Your betting is frozen' }, { status: 403 });
   if (user.credits < credits) return NextResponse.json({ error: 'Insufficient credits' }, { status: 400 });
 
   const { rows: betRows } = await sql`SELECT * FROM bets WHERE id = ${betId} AND deleted_at IS NULL`;
   const bet = betRows[0];
-  if (!bet) return NextResponse.json({ error: 'Bet not found' }, { status: 404 });
+  if (!bet)                  return NextResponse.json({ error: 'Bet not found' }, { status: 404 });
   if (bet.status !== 'open') return NextResponse.json({ error: 'Bet is not open' }, { status: 400 });
 
+  // Deduct credits and insert position
   await sql`UPDATE users SET credits = credits - ${credits} WHERE id = ${user.id}`;
   await sql`INSERT INTO bet_positions (bet_id, user_id, side, amount) VALUES (${betId}, ${user.id}, ${side}, ${credits})`;
 
-  if (side === 'yes') {
-    await sql`UPDATE bets SET total_yes = COALESCE(total_yes,0) + ${credits} WHERE id = ${betId}`;
-  } else {
-    await sql`UPDATE bets SET total_no = COALESCE(total_no,0) + ${credits} WHERE id = ${betId}`;
-  }
+  // Recompute totals from scratch (always accurate)
+  const { rows: totals } = await sql`
+    SELECT
+      COALESCE(SUM(CASE WHEN side = 'yes' THEN amount ELSE 0 END), 0) as total_yes,
+      COALESCE(SUM(CASE WHEN side = 'no'  THEN amount ELSE 0 END), 0) as total_no
+    FROM bet_positions WHERE bet_id = ${betId}
+  `;
+  await sql`
+    UPDATE bets SET total_yes = ${parseInt(totals[0].total_yes)}, total_no = ${parseInt(totals[0].total_no)}
+    WHERE id = ${betId}
+  `;
 
   const { rows: updatedUser } = await sql`SELECT credits FROM users WHERE id = ${user.id}`;
   return NextResponse.json({ ok: true, credits: updatedUser[0].credits });

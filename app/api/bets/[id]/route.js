@@ -13,13 +13,37 @@ export async function GET(req, { params }) {
     `;
     if (!betRows[0]) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
-    // Positions: one row per user (sum across both sides)
+    // Compute true totals directly from positions (source of truth)
+    const { rows: totalsRows } = await sql`
+      SELECT
+        COALESCE(SUM(CASE WHEN side = 'yes' THEN amount ELSE 0 END), 0) as real_yes,
+        COALESCE(SUM(CASE WHEN side = 'no'  THEN amount ELSE 0 END), 0) as real_no
+      FROM bet_positions
+      WHERE bet_id = ${id}
+    `;
+    const realYes = parseInt(totalsRows[0].real_yes);
+    const realNo  = parseInt(totalsRows[0].real_no);
+
+    // Also keep bets table in sync so other queries are accurate
+    await sql`
+      UPDATE bets SET total_yes = ${realYes}, total_no = ${realNo}
+      WHERE id = ${id}
+    `;
+
+    // Override bet totals with the computed accurate values
+    const bet = {
+      ...betRows[0],
+      total_yes: realYes,
+      total_no:  realNo,
+    };
+
+    // Positions: one row per unique user showing both sides
     const { rows: positions } = await sql`
       SELECT
         COALESCE(u.username, u.name) as user_name,
         u.id as user_id,
-        SUM(CASE WHEN bp.side = 'yes' THEN bp.amount ELSE 0 END) as yes_amount,
-        SUM(CASE WHEN bp.side = 'no'  THEN bp.amount ELSE 0 END) as no_amount,
+        COALESCE(SUM(CASE WHEN bp.side = 'yes' THEN bp.amount ELSE 0 END), 0) as yes_amount,
+        COALESCE(SUM(CASE WHEN bp.side = 'no'  THEN bp.amount ELSE 0 END), 0) as no_amount,
         SUM(bp.amount) as amount,
         CASE
           WHEN SUM(CASE WHEN bp.side='yes' THEN bp.amount ELSE 0 END) >=
@@ -33,13 +57,9 @@ export async function GET(req, { params }) {
       ORDER BY SUM(bp.amount) DESC
     `;
 
-    // Probability history: one snapshot per 5-minute bucket from actual trades
-    // Compute running yes_pct after each trade chronologically
+    // Probability history: 5-min buckets from actual trades (running total)
     const { rows: trades } = await sql`
-      SELECT
-        side,
-        amount,
-        created_at,
+      SELECT side, amount, created_at,
         date_trunc('hour', created_at) +
           INTERVAL '5 min' * FLOOR(EXTRACT(MINUTE FROM created_at) / 5) as bucket
       FROM bet_positions
@@ -47,25 +67,22 @@ export async function GET(req, { params }) {
       ORDER BY created_at ASC
     `;
 
-    // Build 5-min bucket snapshots
     const buckets = new Map();
     let runningYes = 0;
-    let runningNo = 0;
+    let runningNo  = 0;
     for (const t of trades) {
       if (t.side === 'yes') runningYes += parseInt(t.amount);
-      else runningNo += parseInt(t.amount);
+      else                  runningNo  += parseInt(t.amount);
       const total = runningYes + runningNo;
-      const pct = total > 0 ? Math.round((runningYes / total) * 100) : 50;
-      const key = new Date(t.bucket).toISOString();
-      buckets.set(key, pct);
+      const pct   = total > 0 ? Math.round((runningYes / total) * 100) : 50;
+      buckets.set(new Date(t.bucket).toISOString(), pct);
     }
 
-    // Convert to sorted array of { t, pct }
     const history = Array.from(buckets.entries())
       .sort((a, b) => a[0].localeCompare(b[0]))
       .map(([t, pct]) => ({ t, pct }));
 
-    return NextResponse.json({ bet: betRows[0], positions, history });
+    return NextResponse.json({ bet, positions, history });
   } catch (err) {
     console.error('[GET /api/bets/[id]]', err);
     return NextResponse.json({ error: 'Internal error' }, { status: 500 });
