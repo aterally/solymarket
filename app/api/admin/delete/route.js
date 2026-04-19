@@ -2,26 +2,21 @@ import { getServerSession } from 'next-auth';
 import { sql } from '@vercel/postgres';
 import { NextResponse } from 'next/server';
 
-async function requireAdmin(session) {
-  if (!session?.user?.email) return false;
-  const { rows } = await sql`SELECT is_admin FROM users WHERE email = ${session.user.email}`;
-  return rows[0]?.is_admin === true;
-}
-
 export async function POST(req) {
   const session = await getServerSession();
-  if (!await requireAdmin(session)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  if (!session?.user?.email) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const { betId } = await req.json();
+  const { rows: userRows } = await sql`SELECT id, is_admin FROM users WHERE email = ${session.user.email}`;
+  if (!userRows[0]?.is_admin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+
+  let body;
+  try { body = await req.json(); } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
+
+  const { betId } = body;
   if (!betId) return NextResponse.json({ error: 'betId required' }, { status: 400 });
 
-  // Check market is not open (only allow deleting closed/resolved/refunded)
-  const { rows: betRows } = await sql`SELECT status FROM bets WHERE id = ${betId}`;
-  if (!betRows[0]) return NextResponse.json({ error: 'Market not found' }, { status: 404 });
-
-  // Delete positions first (FK constraint), then the bet
-  await sql`DELETE FROM bet_positions WHERE bet_id = ${betId}`;
-  await sql`DELETE FROM bets WHERE id = ${betId}`;
+  // Soft-delete: set deleted_at timestamp so the bet is invisible but data is preserved
+  await sql`UPDATE bets SET deleted_at = NOW() WHERE id = ${betId}`;
 
   return NextResponse.json({ ok: true });
 }

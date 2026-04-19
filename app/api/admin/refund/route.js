@@ -6,22 +6,24 @@ export async function POST(req) {
   const session = await getServerSession();
   if (!session?.user?.email) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const { rows: userRows } = await sql`SELECT is_admin FROM users WHERE email = ${session.user.email}`;
-  if (!userRows[0]?.is_admin) return NextResponse.json({ error: 'Admin only' }, { status: 403 });
+  const { rows: userRows } = await sql`SELECT id, is_admin FROM users WHERE email = ${session.user.email}`;
+  if (!userRows[0]?.is_admin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
-  const { betId } = await req.json();
-  const { rows: betRows } = await sql`SELECT * FROM bets WHERE id = ${betId}`;
-  const bet = betRows[0];
-  if (!bet) return NextResponse.json({ error: 'Bet not found' }, { status: 404 });
-  if (bet.status !== 'open') return NextResponse.json({ error: 'Bet already closed' }, { status: 400 });
+  let body;
+  try { body = await req.json(); } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
 
-  const { rows: positions } = await sql`SELECT * FROM bet_positions WHERE bet_id = ${betId}`;
+  const { betId } = body;
+  if (!betId) return NextResponse.json({ error: 'betId required' }, { status: 400 });
 
-  for (const pos of positions) {
-    await sql`UPDATE users SET credits = credits + ${pos.amount} WHERE id = ${pos.user_id}`;
-  }
+  const { rows: betRows } = await sql`SELECT * FROM bets WHERE id = ${betId} AND deleted_at IS NULL`;
+  if (!betRows[0]) return NextResponse.json({ error: 'Bet not found' }, { status: 404 });
 
   await sql`UPDATE bets SET status = 'refunded', closed_at = NOW() WHERE id = ${betId}`;
+
+  const { rows: positions } = await sql`SELECT * FROM bet_positions WHERE bet_id = ${betId}`;
+  for (const p of positions) {
+    await sql`UPDATE users SET credits = credits + ${p.amount} WHERE id = ${p.user_id}`;
+  }
 
   return NextResponse.json({ ok: true, refunded: positions.length });
 }

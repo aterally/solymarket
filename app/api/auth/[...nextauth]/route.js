@@ -10,51 +10,55 @@ const handler = NextAuth({
     }),
   ],
   callbacks: {
-    async signIn({ user }) {
+    async signIn({ user, account, profile }) {
+      if (!user.email) return false;
       try {
-        const adminEmail = process.env.ADMIN_EMAIL;
-        await sql`
-          INSERT INTO users (id, email, name, image, credits, is_admin)
-          VALUES (${user.id}, ${user.email}, ${user.name}, ${user.image}, 100, ${user.email === adminEmail})
+        const { rows } = await sql`
+          INSERT INTO users (id, email, name, image)
+          VALUES (${user.id || profile.sub}, ${user.email}, ${user.name}, ${user.image})
           ON CONFLICT (email) DO UPDATE SET
             name = EXCLUDED.name,
-            image = EXCLUDED.image,
-            is_admin = CASE WHEN users.email = ${adminEmail} THEN TRUE ELSE users.is_admin END
+            image = COALESCE(users.custom_image, EXCLUDED.image)
+          RETURNING *
         `;
-        const { rows } = await sql`SELECT is_banned FROM users WHERE email = ${user.email}`;
-        if (rows[0]?.is_banned) return '/banned';
         return true;
       } catch (err) {
-        console.error('SignIn error:', err);
-        return true;
+        console.error('[signIn]', err);
+        return false;
       }
     },
-    async session({ session }) {
-      if (session?.user?.email) {
-        try {
-          const { rows } = await sql`
-            SELECT id, username, is_admin, is_manager, is_banned, custom_image
-            FROM users WHERE email = ${session.user.email}
-          `;
-          if (rows[0]) {
-            session.user.id = rows[0].id;
-            session.user.username = rows[0].username;
-            session.user.isAdmin = rows[0].is_admin;
-            session.user.isManager = rows[0].is_manager;
-            session.user.hasUsername = !!rows[0].username;
-            // Override image with custom avatar if set
-            if (rows[0].custom_image) session.user.image = rows[0].custom_image;
-          }
-        } catch (err) {
-          console.error('Session error:', err);
+    async session({ session, token }) {
+      try {
+        const { rows } = await sql`
+          SELECT id, username, is_admin, is_manager, is_banned, is_frozen,
+                 is_muted_comments, is_muted_markets, is_muted_proposing,
+                 credits, COALESCE(custom_image, image) as image
+          FROM users WHERE email = ${session.user.email}
+        `;
+        if (rows[0]) {
+          session.user.id = rows[0].id;
+          session.user.username = rows[0].username || session.user.name?.split(' ')[0];
+          session.user.isAdmin = rows[0].is_admin;
+          session.user.isManager = rows[0].is_manager;
+          session.user.isBanned = rows[0].is_banned;
+          session.user.isFrozen = rows[0].is_frozen;
+          session.user.hasUsername = !!rows[0].username;
+          session.user.credits = rows[0].credits;
+          if (rows[0].image) session.user.image = rows[0].image;
         }
+      } catch (err) {
+        console.error('[session callback]', err);
       }
       return session;
+    },
+    async jwt({ token, user }) {
+      return token;
     },
   },
   pages: {
     signIn: '/',
   },
+  secret: process.env.NEXTAUTH_SECRET,
 });
 
 export { handler as GET, handler as POST };

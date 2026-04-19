@@ -173,7 +173,7 @@ export default function Home() {
     if (!session.user?.hasUsername) setShowUsername(true);
     const doFetch = () => fetch('/api/bets').then(r => r.json()).then(data => { setBets(Array.isArray(data) ? data : []); setLoading(false); });
     doFetch();
-    const iv = setInterval(doFetch, 15000);
+    const iv = setInterval(doFetch, 5000);
     return () => clearInterval(iv);
   }, [session]);
 
@@ -182,7 +182,7 @@ export default function Home() {
   if (!session) {
     return (
       <div className="sign-in-page">
-        <div className="sign-in-logo">solymarket</div>
+        <div className="sign-in-logo"><span style={{ color: "var(--yes)" }}>soly</span>market</div>
         <div className="sign-in-tagline">Prediction markets. Start with 100 solies.</div>
         <div className="sign-in-card">
           <button className="google-btn" onClick={() => signIn('google')}>
