@@ -117,7 +117,7 @@ function UserManageModal({ user, onClose, onDone }) {
   }
 
   const tags = [];
-  if (user.is_admin) tags.push({ label: 'admin', color: 'var(--accent)' });
+  if (user.is_admin) tags.push({ label: 'admin', color: 'var(--yes)' });
   if (user.is_manager) tags.push({ label: 'manager', color: '#d29922' });
   if (user.is_banned) tags.push({ label: 'banned', color: 'var(--no)' });
   if (user.is_muted_comments) tags.push({ label: 'muted comments', color: 'var(--text3)' });
@@ -157,7 +157,7 @@ function UserManageModal({ user, onClose, onDone }) {
           <div style={{ fontSize: '0.7rem', color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600, marginBottom: 2 }}>Role</div>
           <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}>
             {!user.is_admin && (
-              <button className="btn btn-sm" style={{ background: 'var(--accent-dim)', color: 'var(--accent)', border: '1px solid #1c4282' }} disabled={loading === 'make_admin'} onClick={() => doAction('make_admin')}>
+              <button className="btn btn-sm" style={{ background: 'var(--yes-dim)', color: 'var(--yes)', border: '1px solid #166534' }} disabled={loading === 'make_admin'} onClick={() => doAction('make_admin')}>
                 Make admin
               </button>
             )}

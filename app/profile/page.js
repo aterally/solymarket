@@ -157,7 +157,7 @@ export default function ProfilePage() {
         </div>
         {positions?.length === 0 ? (
           <div className="empty" style={{ padding: '40px 0' }}>
-            No positions yet. <Link href="/" style={{ color: 'var(--accent)' }}>Browse markets</Link>
+            No positions yet. <Link href="/" style={{ color: 'var(--yes)' }}>Browse markets</Link>
           </div>
         ) : (
           <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden', marginBottom: 24 }}>

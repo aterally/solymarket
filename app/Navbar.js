@@ -49,23 +49,23 @@ export function Navbar() {
             </Link>
           )}
           <Link href="/messages" className="btn btn-ghost btn-sm" title="Messages" style={{ position: 'relative' }}>
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
             </svg>
             {pendingCount > 0 && (
-              <span style={{ position: 'absolute', top: -4, right: -4, background: 'var(--no)', color: '#fff', borderRadius: '50%', width: 14, height: 14, fontSize: '0.6rem', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700 }}>
+              <span style={{ position: 'absolute', top: -3, right: -3, background: 'var(--yes)', color: '#000', borderRadius: '50%', width: 13, height: 13, fontSize: '0.58rem', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700 }}>
                 {pendingCount}
               </span>
             )}
           </Link>
           <Link href="/leaderboard" className="btn btn-ghost btn-sm" title="Leaderboard">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <rect x="8" y="2" width="8" height="20" rx="1"/><rect x="2" y="10" width="6" height="12" rx="1"/><rect x="16" y="6" width="6" height="16" rx="1"/>
             </svg>
           </Link>
           {isAdmin && (
-            <Link href="/admin" className="btn btn-sm" style={{ background: 'var(--accent-dim)', color: 'var(--accent)', border: '1px solid #1c4282', display: 'flex', alignItems: 'center', gap: 5 }}>
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            <Link href="/admin" className="btn btn-sm" style={{ background: 'var(--yes-dim)', color: 'var(--yes)', border: '1px solid #166534', display: 'flex', alignItems: 'center', gap: 5 }}>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
               Admin
             </Link>
           )}

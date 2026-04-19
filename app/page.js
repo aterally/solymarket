@@ -26,7 +26,7 @@ function CircularProgress({ pct, size = 48 }) {
       </svg>
       <div style={{
         position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
-        fontSize: size < 50 ? '0.62rem' : '0.72rem', fontWeight: 700, color, lineHeight: 1
+        fontSize: size < 50 ? '0.6rem' : '0.7rem', fontWeight: 700, color, lineHeight: 1
       }}>
         {pct}%
       </div>
@@ -39,52 +39,60 @@ function BetCard({ bet }) {
   const hasVotes = total > 0;
   const yesPct = hasVotes ? Math.round((bet.total_yes / total) * 100) : null;
   const isClosed = bet.status !== 'open';
+  const isRefunded = bet.status === 'refunded';
+  const isResolved = bet.status === 'resolved';
+  const resolvedYes = isResolved && bet.outcome === 'yes';
+  const resolvedNo = isResolved && bet.outcome === 'no';
 
   const inner = (
     <>
       <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div className="bet-meta">
-            {bet.status === 'resolved' && bet.outcome && (
+            {isResolved && bet.outcome && (
               <span className={`outcome-badge outcome-${bet.outcome}`}>{bet.outcome.toUpperCase()}</span>
             )}
-            {bet.status === 'refunded' && <span className="status-badge status-refunded">REFUNDED</span>}
+            {isRefunded && <span className="status-badge status-refunded">REFUNDED</span>}
           </div>
           <div className="bet-title" style={{ color: isClosed ? 'var(--text2)' : 'var(--text)', marginBottom: 0 }}>{bet.title}</div>
         </div>
         {hasVotes
-          ? <CircularProgress pct={yesPct} size={52} />
-          : <div style={{ width: 52, height: 52, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--surface2)', borderRadius: '50%', border: '3px solid var(--border)', fontSize: '1rem', fontWeight: 700, color: 'var(--text3)' }}>?</div>
+          ? <CircularProgress pct={yesPct} size={48} />
+          : <div style={{ width: 48, height: 48, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--surface2)', borderRadius: '50%', border: '2px solid var(--border)', fontSize: '0.9rem', fontWeight: 700, color: 'var(--text3)' }}>?</div>
         }
       </div>
 
-      <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
+      <div style={{ display: 'flex', gap: 6, marginTop: 14 }}>
         <div style={{
-          flex: 1, padding: '6px 0', borderRadius: 'var(--radius)',
-          background: 'var(--yes-dim)', border: '1px solid #1a4d2a',
-          textAlign: 'center', fontSize: '0.82rem', fontWeight: 700, color: 'var(--yes)'
+          flex: 1, padding: '5px 0', borderRadius: 'var(--radius)',
+          background: (isRefunded || resolvedNo) ? 'var(--surface2)' : 'var(--yes-dim)',
+          border: `1px solid ${(isRefunded || resolvedNo) ? 'var(--border)' : '#166534'}`,
+          textAlign: 'center', fontSize: '0.8rem', fontWeight: 700,
+          color: (isRefunded || resolvedNo) ? 'var(--text3)' : 'var(--yes)'
         }}>
           Yes {hasVotes ? `${yesPct}%` : '—'}
         </div>
         <div style={{
-          flex: 1, padding: '6px 0', borderRadius: 'var(--radius)',
-          background: 'var(--no-dim)', border: '1px solid #5c1a1a',
-          textAlign: 'center', fontSize: '0.82rem', fontWeight: 700, color: 'var(--no)'
+          flex: 1, padding: '5px 0', borderRadius: 'var(--radius)',
+          background: (isRefunded || resolvedYes) ? 'var(--surface2)' : 'var(--no-dim)',
+          border: `1px solid ${(isRefunded || resolvedYes) ? 'var(--border)' : '#7f1d1d'}`,
+          textAlign: 'center', fontSize: '0.8rem', fontWeight: 700,
+          color: (isRefunded || resolvedYes) ? 'var(--text3)' : 'var(--no)'
         }}>
           No {hasVotes ? `${100 - yesPct}%` : '—'}
         </div>
       </div>
 
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 12 }}>
-        <span style={{ fontSize: '0.75rem', color: 'var(--text3)' }}>${total.toLocaleString()} Vol.</span>
-        <span style={{ fontSize: '0.75rem', color: 'var(--text3)' }}>{bet.participant_count || 0} bets</span>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 10 }}>
+        <span style={{ fontSize: '0.72rem', color: 'var(--text3)' }}>${total.toLocaleString()} Vol.</span>
+        <span style={{ fontSize: '0.72rem', color: 'var(--text3)' }}>{bet.participant_count || 0} bets</span>
       </div>
     </>
   );
 
   if (isClosed) {
     return (
-      <div className="card" style={{ opacity: 0.65, cursor: 'default', pointerEvents: 'none' }}>
+      <div className="card" style={{ opacity: 0.6, cursor: 'default', pointerEvents: 'none' }}>
         {inner}
       </div>
     );
@@ -144,9 +152,10 @@ function CreateBetModal({ onClose, onCreated }) {
 
 function sortBets(bets) {
   return [...bets].sort((a, b) => {
-    const aOpen = a.status === 'open' ? 0 : 1;
-    const bOpen = b.status === 'open' ? 0 : 1;
-    if (aOpen !== bOpen) return aOpen - bOpen;
+    const order = { open: 0, resolved: 1, refunded: 2 };
+    const aOrder = order[a.status] ?? 1;
+    const bOrder = order[b.status] ?? 1;
+    if (aOrder !== bOrder) return aOrder - bOrder;
     return new Date(b.created_at) - new Date(a.created_at);
   });
 }
@@ -156,7 +165,7 @@ export default function Home() {
   const [bets, setBets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
-  const [filter, setFilter] = useState('all');
+  const [filter, setFilter] = useState('open');
   const [showUsername, setShowUsername] = useState(false);
 
   useEffect(() => {
@@ -209,7 +218,7 @@ export default function Home() {
         </div>
 
         <div className="tabs">
-          {[['all', 'All'], ['open', 'Open'], ['closed', 'Closed']].map(([val, label]) => (
+          {[['open', 'Open'], ['closed', 'Closed'], ['all', 'All']].map(([val, label]) => (
             <button key={val} className={`tab${filter === val ? ' active' : ''}`} onClick={() => setFilter(val)}>{label}</button>
           ))}
         </div>
