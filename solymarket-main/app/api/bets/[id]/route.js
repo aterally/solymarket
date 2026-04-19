@@ -13,24 +13,33 @@ export async function GET(req, { params }) {
     `;
     if (!betRows[0]) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
-    // Compute true totals directly from positions (source of truth)
+    // Compute totals from bet_positions (tracks individual trades)
     const { rows: totalsRows } = await sql`
       SELECT
-        COALESCE(SUM(CASE WHEN side = 'yes' THEN amount ELSE 0 END), 0) as real_yes,
-        COALESCE(SUM(CASE WHEN side = 'no'  THEN amount ELSE 0 END), 0) as real_no
+        COALESCE(SUM(CASE WHEN side = 'yes' THEN amount ELSE 0 END), 0) as pos_yes,
+        COALESCE(SUM(CASE WHEN side = 'no'  THEN amount ELSE 0 END), 0) as pos_no
       FROM bet_positions
       WHERE bet_id = ${id}
     `;
-    const realYes = parseInt(totalsRows[0].real_yes);
-    const realNo  = parseInt(totalsRows[0].real_no);
+    const posYes   = parseInt(totalsRows[0].pos_yes);
+    const posNo    = parseInt(totalsRows[0].pos_no);
 
-    // Also keep bets table in sync so other queries are accurate
-    await sql`
-      UPDATE bets SET total_yes = ${realYes}, total_no = ${realNo}
-      WHERE id = ${id}
-    `;
+    // Use the HIGHER of bet_positions sum vs bets table value.
+    // This preserves totals for markets where total_yes/total_no was set directly
+    // (e.g. before bet_positions tracking existed), while still reflecting new trades.
+    const tableYes = parseInt(betRows[0].total_yes) || 0;
+    const tableNo  = parseInt(betRows[0].total_no)  || 0;
+    const realYes  = Math.max(posYes, tableYes);
+    const realNo   = Math.max(posNo,  tableNo);
 
-    // Override bet totals with the computed accurate values
+    // Only write back if bet_positions has MORE — never overwrite a higher value with 0
+    if (posYes > tableYes || posNo > tableNo) {
+      await sql`
+        UPDATE bets SET total_yes = ${realYes}, total_no = ${realNo}
+        WHERE id = ${id}
+      `;
+    }
+
     const bet = {
       ...betRows[0],
       total_yes: realYes,
@@ -76,6 +85,14 @@ export async function GET(req, { params }) {
       const total = runningYes + runningNo;
       const pct   = total > 0 ? Math.round((runningYes / total) * 100) : 50;
       buckets.set(new Date(t.bucket).toISOString(), pct);
+    }
+
+    // If no bet_positions history at all, synthesise a single point from the bets table
+    // so the chart and probability bar show the correct current value.
+    if (buckets.size === 0 && (realYes > 0 || realNo > 0)) {
+      const total = realYes + realNo;
+      const pct   = Math.round((realYes / total) * 100);
+      buckets.set(new Date().toISOString(), pct);
     }
 
     const history = Array.from(buckets.entries())

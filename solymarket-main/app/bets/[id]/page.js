@@ -1,6 +1,6 @@
 'use client';
 import { useSession } from 'next-auth/react';
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import { Navbar } from '../../Navbar';
 
@@ -503,74 +503,38 @@ export default function BetPage({ params }) {
   const [myPosition, setMyPosition] = useState(null);
   const [userCredits, setUserCredits] = useState(null);
 
-  // Stable ref to always hold the latest session so the polling interval
-  // never goes stale without needing to restart when session changes.
-  const sessionRef = useRef(session);
-  useEffect(() => { sessionRef.current = session; }, [session]);
+  const load = useCallback(async () => {
+    const res = await fetch(`/api/bets/${params.id}`);
+    const d = await res.json();
+    if (d.bet) {
+      setData(d);
+      // Update history from DB (sorted 5-min bucket snapshots)
+      if (Array.isArray(d.history)) setHistory(d.history);
 
-  const betId = params.id;
-
-  // Single polling effect — defined entirely inside useEffect just like the home page.
-  // Depends only on betId (stable). Uses sessionRef to read current session without
-  // the effect needing to restart when session changes.
-  useEffect(() => {
-    async function doFetch() {
-      try {
-        const res = await fetch(`/api/bets/${betId}`, { cache: 'no-store' });
-        const d = await res.json();
-        if (!d.bet) return;
-        setData(d);
-        if (Array.isArray(d.history)) setHistory(d.history);
-        setLoading(false);
-
-        const currentSession = sessionRef.current;
-        if (currentSession?.user?.email) {
-          const meRes = await fetch('/api/user/me', { cache: 'no-store' });
-          const me = await meRes.json();
-          if (me.user) setUserCredits(me.user.credits);
-          if (me.positions) {
-            const betPositions = me.positions.filter(p => p.bet_id === parseInt(betId));
+      if (session?.user?.email) {
+        const meRes = await fetch('/api/user/me');
+        const me = await meRes.json();
+        if (me.user) setUserCredits(me.user.credits);
+        if (me.positions) {
+          const betPositions = me.positions.filter(p => p.bet_id === parseInt(params.id));
+          if (betPositions.length > 0) {
             const yesTotal = betPositions.filter(p => p.side === 'yes').reduce((s, p) => s + parseInt(p.amount), 0);
             const noTotal  = betPositions.filter(p => p.side === 'no').reduce((s, p) => s + parseInt(p.amount), 0);
             if (yesTotal > 0 || noTotal > 0) setMyPosition({ side: yesTotal >= noTotal ? 'yes' : 'no', amount: yesTotal + noTotal, yes_amount: yesTotal, no_amount: noTotal });
           }
         }
-      } catch (e) {
-        // network hiccup — just wait for next tick
       }
     }
+    setLoading(false);
+  }, [session, params.id]);
 
-    doFetch();
-    const iv = setInterval(doFetch, 5000);
-    return () => clearInterval(iv);
-  }, [betId]);
-
-  // Keep a stable ref to the latest doFetch logic so placeBet can trigger an
-  // immediate refresh without needing to re-declare the function.
-  const refreshRef = useRef(null);
   useEffect(() => {
-    refreshRef.current = async () => {
-      try {
-        const res = await fetch(`/api/bets/${betId}`, { cache: 'no-store' });
-        const d = await res.json();
-        if (!d.bet) return;
-        setData(d);
-        if (Array.isArray(d.history)) setHistory(d.history);
-        const currentSession = sessionRef.current;
-        if (currentSession?.user?.email) {
-          const meRes = await fetch('/api/user/me', { cache: 'no-store' });
-          const me = await meRes.json();
-          if (me.user) setUserCredits(me.user.credits);
-          if (me.positions) {
-            const betPositions = me.positions.filter(p => p.bet_id === parseInt(betId));
-            const yesTotal = betPositions.filter(p => p.side === 'yes').reduce((s, p) => s + parseInt(p.amount), 0);
-            const noTotal  = betPositions.filter(p => p.side === 'no').reduce((s, p) => s + parseInt(p.amount), 0);
-            if (yesTotal > 0 || noTotal > 0) setMyPosition({ side: yesTotal >= noTotal ? 'yes' : 'no', amount: yesTotal + noTotal, yes_amount: yesTotal, no_amount: noTotal });
-          }
-        }
-      } catch (e) {}
-    };
-  }, [betId]);
+    if (session !== undefined) {
+      load();
+      const iv = setInterval(load, 5000);
+      return () => clearInterval(iv);
+    }
+  }, [load]);
 
   async function placeBet() {
     const credits = parseInt(amount);
@@ -583,7 +547,7 @@ export default function BetPage({ params }) {
     setSuccess(`Placed ${credits} sl on ${side.toUpperCase()}`);
     setUserCredits(d.credits);
     setAmount('');
-    if (refreshRef.current) refreshRef.current();
+    load();
     setTimeout(() => setSuccess(''), 4000);
   }
 
@@ -688,7 +652,7 @@ export default function BetPage({ params }) {
 
           {/* Right sidebar */}
           <div className="sticky-sidebar">
-            {isAdmin && <AdminSidebar bet={bet} onResolved={() => refreshRef.current && refreshRef.current()} betId={params.id} />}
+            {isAdmin && <AdminSidebar bet={bet} onResolved={load} betId={params.id} />}
             {isManager && !isAdmin && <ManagerSidebar bet={bet} betId={params.id} />}
 
             {/* My position */}
