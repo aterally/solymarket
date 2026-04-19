@@ -503,38 +503,54 @@ export default function BetPage({ params }) {
   const [myPosition, setMyPosition] = useState(null);
   const [userCredits, setUserCredits] = useState(null);
 
-  const load = useCallback(async () => {
+  // Load market data (bet, positions, history) — no auth required, stable polling
+  const loadMarket = useCallback(async () => {
     const res = await fetch(`/api/bets/${params.id}`);
     const d = await res.json();
     if (d.bet) {
       setData(d);
-      // Update history from DB (sorted 5-min bucket snapshots)
       if (Array.isArray(d.history)) setHistory(d.history);
-
-      if (session?.user?.email) {
-        const meRes = await fetch('/api/user/me');
-        const me = await meRes.json();
-        if (me.user) setUserCredits(me.user.credits);
-        if (me.positions) {
-          const betPositions = me.positions.filter(p => p.bet_id === parseInt(params.id));
-          if (betPositions.length > 0) {
-            const yesTotal = betPositions.filter(p => p.side === 'yes').reduce((s, p) => s + parseInt(p.amount), 0);
-            const noTotal  = betPositions.filter(p => p.side === 'no').reduce((s, p) => s + parseInt(p.amount), 0);
-            if (yesTotal > 0 || noTotal > 0) setMyPosition({ side: yesTotal >= noTotal ? 'yes' : 'no', amount: yesTotal + noTotal, yes_amount: yesTotal, no_amount: noTotal });
-          }
-        }
-      }
     }
     setLoading(false);
+  }, [params.id]);
+
+  // Load user-specific data (credits, positions) — only when session is available
+  const loadUser = useCallback(async () => {
+    if (!session?.user?.email) return;
+    const meRes = await fetch('/api/user/me');
+    const me = await meRes.json();
+    if (me.user) setUserCredits(me.user.credits);
+    if (me.positions) {
+      const betPositions = me.positions.filter(p => p.bet_id === parseInt(params.id));
+      if (betPositions.length > 0) {
+        const yesTotal = betPositions.filter(p => p.side === 'yes').reduce((s, p) => s + parseInt(p.amount), 0);
+        const noTotal  = betPositions.filter(p => p.side === 'no').reduce((s, p) => s + parseInt(p.amount), 0);
+        if (yesTotal > 0 || noTotal > 0) setMyPosition({ side: yesTotal >= noTotal ? 'yes' : 'no', amount: yesTotal + noTotal, yes_amount: yesTotal, no_amount: noTotal });
+      }
+    }
   }, [session, params.id]);
 
+  // Keep a ref to loadUser so the market polling interval can call it without recreating
+  const loadUserRef = useRef(loadUser);
+  useEffect(() => { loadUserRef.current = loadUser; }, [loadUser]);
+
+  // Combined load used by interval — market data + user data together
+  const load = useCallback(async () => {
+    await loadMarket();
+    await loadUserRef.current();
+  }, [loadMarket]);
+
+  // Stable polling: keyed only to params.id so session changes don't reset the interval
   useEffect(() => {
-    if (session !== undefined) {
-      load();
-      const iv = setInterval(load, 5000);
-      return () => clearInterval(iv);
-    }
+    load();
+    const iv = setInterval(load, 5000);
+    return () => clearInterval(iv);
   }, [load]);
+
+  // Re-fetch user data immediately when session changes (login/logout)
+  useEffect(() => {
+    if (session !== undefined) loadUser();
+  }, [session, loadUser]);
 
   async function placeBet() {
     const credits = parseInt(amount);
