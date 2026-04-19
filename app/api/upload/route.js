@@ -1,6 +1,6 @@
 import { getServerSession } from 'next-auth';
 import { NextResponse } from 'next/server';
-import { rateLimit, getIP } from '../../../lib/rateLimit';
+import { rateLimit, getIP } from '@/lib/rateLimit';
 
 const MAX_SIZE = 2 * 1024 * 1024; // 2MB
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];

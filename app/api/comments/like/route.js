@@ -1,7 +1,7 @@
 import { getServerSession } from 'next-auth';
 import { sql } from '@vercel/postgres';
 import { NextResponse } from 'next/server';
-import { rateLimit, getIP } from '../../../../../lib/rateLimit';
+import { rateLimit, getIP } from '@/lib/rateLimit';
 
 export async function POST(req) {
   const ip = getIP(req);

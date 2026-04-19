@@ -1,8 +1,8 @@
 import { getServerSession } from 'next-auth';
 import { sql } from '@vercel/postgres';
 import { NextResponse } from 'next/server';
-import { rateLimit, getIP } from '../../../../lib/rateLimit';
-import { sanitizeText } from '../../../../lib/sanitize';
+import { rateLimit, getIP } from '@/lib/rateLimit';
+import { sanitizeText } from '@/lib/sanitize';
 
 export async function GET(req) {
   const betId = req.nextUrl.searchParams.get('betId');
